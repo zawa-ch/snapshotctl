@@ -125,13 +125,14 @@ initialize() {
 		"CREATE TABLE \"\($db_prefix)entries\" ( \"id\" INTEGER NOT NULL UNIQUE, \"date\" NUMERIC NOT NULL, \"fname\" TEXT NOT NULL UNIQUE, \"size\" INTEGER NOT NULL, \"sha256\" TEXT NOT NULL, \"type\" TEXT NOT NULL, \"depend_id\" INTEGER, PRIMARY KEY(\"id\"), FOREIGN KEY(\"depend_id\") REFERENCES \"\($db_prefix)entries\"(\"id\") ON UPDATE CASCADE )",
 		"CREATE INDEX \"\($db_prefix)entry-dates\" ON \"\($db_prefix)entries\" ( \"date\" )",
 		"CREATE UNIQUE INDEX \"\($db_prefix)entry-filenames\" ON \"\($db_prefix)entries\" ( \"fname\" )",
-		"CREATE TABLE \"\($db_prefix)keeprules\" ( \"name\" TEXT NOT NULL UNIQUE, \"store_type\" TEXT NOT NULL DEFAULT '\''normal'\'', \"bind_duration\" INTEGER, \"keep_entries\" INTEGER, \"keep_duration\" INTEGER )",
+		"CREATE TABLE \"\($db_prefix)keeprules\" ( \"name\" TEXT NOT NULL UNIQUE, \"store_type\" TEXT, \"bind_duration\" INTEGER, \"keep_entries\" INTEGER, \"keep_duration\" INTEGER )",
 		"CREATE UNIQUE INDEX \"\($db_prefix)keeprule-names\" ON \"\($db_prefix)keeprules\" ( \"name\" )",
 		"CREATE TABLE \"\($db_prefix)keeplist\" ( \"entry_id\" INTEGER NOT NULL, \"rule\" TEXT NOT NULL, FOREIGN KEY(\"entry_id\") REFERENCES \"\($db_prefix)entries\"(\"id\") ON UPDATE CASCADE ON DELETE CASCADE, FOREIGN KEY(\"rule\") REFERENCES \"\($db_prefix)keeprules\"(\"name\") ON UPDATE CASCADE ON DELETE CASCADE )",
 		"CREATE VIEW \"\($db_prefix)keep-entries\" AS SELECT \"rule\", \"\($db_prefix)entries\".* FROM \"\($db_prefix)keeplist\" LEFT JOIN \"\($db_prefix)entries\" ON \"\($db_prefix)keeplist\".\"entry_id\"=\"\($db_prefix)entries\".\"id\" ORDER BY \"\($db_prefix)entries\".\"date\"",
 		"CREATE VIEW \"\($db_prefix)keep-entry-latests\" AS SELECT * FROM \"\($db_prefix)keep-entries\" GROUP BY \"rule\" HAVING \"date\"=MAX(\"date\")",
 		"CREATE TABLE \"\($db_prefix)remove_queue\" ( \"entry_id\" INTEGER NOT NULL, FOREIGN KEY(\"entry_id\") REFERENCES \"\($db_prefix)entries\"(\"id\") ON UPDATE CASCADE ON DELETE CASCADE )",
 		"CREATE TABLE \"\($db_prefix)add_queue\" ( \"entry_id\" INTEGER NOT NULL, FOREIGN KEY(\"entry_id\") REFERENCES \"\($db_prefix)entries\"(\"id\") ON UPDATE CASCADE ON DELETE CASCADE )",
+		"CREATE TABLE \"\($db_prefix)compression_queue\" ( \"entry_id\" INTEGER NOT NULL, FOREIGN KEY(\"entry_id\") REFERENCES \"\($db_prefix)entries\"(\"id\") ON UPDATE CASCADE ON DELETE CASCADE )",
 		"INSERT INTO \"\($db_prefix)metadata\"( \"schema_revision\" ) VALUES ( \($schema_rev) )",
 		(
 			"INSERT INTO \"\($db_prefix)config\"( \"key\", \"value\" ) VALUES " + ( [
@@ -150,7 +151,7 @@ initialize() {
 				.value + { name: .key } |
 				"(" +
 				"'\''\(.name)'\'', " +
-				(if (.store_type|type)=="object" then "'\''\(.store_type)'\''" else "'\''normal'\''" end) + ", " +
+				(if (.store_type|type)=="string" then "'\''\(.store_type)'\''" else "NULL" end) + ", " +
 				(if (.bind_duration|type)=="number" then "\(.bind_duration)" else "NULL" end) + ", " +
 				(if (.keep_entries|type)=="number" then "\(.keep_entries)" else "NULL" end) + ", " +
 				(if (.keep_duration|type)=="number" then "\(.keep_duration)" else "NULL" end) +
@@ -279,7 +280,7 @@ update_keeplist() {
 	) + (
 		$rules|map( if (.keep_duration|type) == "number" then "DELETE FROM \"\($db_prefix)keeplist\" WHERE \"rule\"='\''\(.name)'\'' AND \"entry_id\" IN ( SELECT \"id\" FROM \"\($db_prefix)keep-entries\" WHERE \"date\" < ( SELECT (\"date\"-\(.keep_duration)) FROM \"\($db_prefix)keep-entry-latests\" WHERE \"rule\"='\''\(.name)'\'' ) )" else empty end )
 	) + (
-		$rules|if length > 0 then [ "INSERT INTO \"\($db_prefix)remove_queue\"(\"entry_id\") SELECT \"id\" FROM \"\($db_prefix)entries\" WHERE \"id\" NOT IN ( SELECT \"entry_id\" FROM \"\($db_prefix)keeplist\" UNION SELECT \"entry_id\" FROM \"\($db_prefix)remove_queue\" )" ] else [] end
+		$rules|if length > 0 then [ "INSERT INTO \"\($db_prefix)remove_queue\"(\"entry_id\") SELECT \"id\" FROM \"\($db_prefix)entries\" WHERE \"id\" NOT IN ( SELECT \"entry_id\" FROM \"\($db_prefix)keeplist\" UNION SELECT \"entry_id\" FROM \"\($db_prefix)remove_queue\" )", "INSERT INTO \"\($db_prefix)compression_queue\"(\"entry_id\") SELECT DISTINCT \"entry_id\" FROM \"\($db_prefix)keeplist\" INNER JOIN \"\($db_prefix)keeprules\" ON \"\($db_prefix)keeprules\".\"name\"=\"\($db_prefix)keeplist\".\"rule\" WHERE \"\($db_prefix)keeprules\".\"store_type\" IS NOT NULL AND \"entry_id\" NOT IN ( SELECT \"\($db_prefix)keep-entry-latests\".\"id\" FROM \"\($db_prefix)keep-entry-latests\" UNION SELECT \"entry_id\" FROM \"\($db_prefix)compression_queue\" )" ] else [] end
 	) + [
 		"COMMIT TRANSACTION"
 	] )|join(";")'
