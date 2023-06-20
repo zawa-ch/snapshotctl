@@ -130,7 +130,7 @@ initialize() {
 		"CREATE TABLE \"\($db_prefix)keeplist\" ( \"entry_id\" INTEGER NOT NULL, \"rule\" TEXT NOT NULL, FOREIGN KEY(\"entry_id\") REFERENCES \"\($db_prefix)entries\"(\"id\") ON UPDATE CASCADE ON DELETE CASCADE, FOREIGN KEY(\"rule\") REFERENCES \"\($db_prefix)keeprules\"(\"name\") ON UPDATE CASCADE ON DELETE CASCADE )",
 		"CREATE VIEW \"\($db_prefix)keep-entries\" AS SELECT \"rule\", \"\($db_prefix)entries\".* FROM \"\($db_prefix)keeplist\" LEFT JOIN \"\($db_prefix)entries\" ON \"\($db_prefix)keeplist\".\"entry_id\"=\"\($db_prefix)entries\".\"id\" ORDER BY \"\($db_prefix)entries\".\"date\"",
 		"CREATE VIEW \"\($db_prefix)keep-entry-latests\" AS SELECT * FROM \"\($db_prefix)keep-entries\" GROUP BY \"rule\" HAVING \"date\"=MAX(\"date\")",
-		"CREATE TABLE \"\($db_prefix)remove_queue\" ( \"path\" TEXT NOT NULL )",
+		"CREATE TABLE \"\($db_prefix)remove_queue\" ( \"entry_id\" INTEGER NOT NULL, FOREIGN KEY(\"entry_id\") REFERENCES \"\($db_prefix)entries\"(\"id\") ON UPDATE CASCADE ON DELETE CASCADE )",
 		"CREATE TABLE \"\($db_prefix)add_queue\" ( \"entry_id\" INTEGER NOT NULL, FOREIGN KEY(\"entry_id\") REFERENCES \"\($db_prefix)entries\"(\"id\") ON UPDATE CASCADE ON DELETE CASCADE )",
 		"INSERT INTO \"\($db_prefix)metadata\"( \"schema_revision\" ) VALUES ( \($schema_rev) )",
 		(
@@ -279,7 +279,7 @@ update_keeplist() {
 	) + (
 		$rules|map( if (.keep_duration|type) == "number" then "DELETE FROM \"\($db_prefix)keeplist\" WHERE \"rule\"='\''\(.name)'\'' AND \"entry_id\" IN ( SELECT \"id\" FROM \"\($db_prefix)keep-entries\" WHERE \"date\" < ( SELECT (\"date\"-\(.keep_duration)) FROM \"\($db_prefix)keep-entry-latests\" WHERE \"rule\"='\''\(.name)'\'' ) )" else empty end )
 	) + (
-		$rules|if length > 0 then [ "INSERT INTO \"\($db_prefix)remove_queue\"(\"path\") SELECT ( ( SELECT \"value\"->>'\''$'\'' FROM \"\($db_prefix)config\" WHERE \"key\"='\''backup_destination'\'' ) || '\''/'\'' || \"fname\") FROM \"\($db_prefix)entries\" WHERE \"id\" NOT IN ( SELECT \"entry_id\" FROM \"\($db_prefix)keeplist\" )", "DELETE FROM \"\($db_prefix)entries\" WHERE \"id\" NOT IN ( SELECT \"entry_id\" FROM \"\($db_prefix)keeplist\" )" ] else [] end
+		$rules|if length > 0 then [ "INSERT INTO \"\($db_prefix)remove_queue\"(\"entry_id\") SELECT \"id\" FROM \"\($db_prefix)entries\" WHERE \"id\" NOT IN ( SELECT \"entry_id\" FROM \"\($db_prefix)keeplist\" UNION SELECT \"entry_id\" FROM \"\($db_prefix)remove_queue\" )" ] else [] end
 	) + [
 		"COMMIT TRANSACTION"
 	] )|join(";")'
@@ -323,12 +323,13 @@ process_add_queue() {
 }
 
 process_remove_queue_item() {
-	local item=$1
-	[ "$(sqlite3 -readonly "${BACKUP_DB_PATH:?}" "SELECT COUNT(*) FROM \"${BACKUP_DB_PREFIX}remove_queue\" WHERE \"path\"='${item:?}'")" -gt 0 ] || { echo "Snapshotctl: Not exist entry ${item} from remove queue" >&2; return 1; }
+	local entry_id=$1
+	[ "$(sqlite3 -readonly "${BACKUP_DB_PATH:?}" "SELECT COUNT(*) FROM \"${BACKUP_DB_PREFIX}remove_queue\" WHERE \"entry_id\"=${entry_id:?}")" -gt 0 ] || { echo "Snapshotctl: Not exist entry ${entry_id} from remove queue" >&2; return 1; }
 
 	local db_location;	db_location=$(cd "$(dirname "${BACKUP_DB_PATH:?}")" && pwd) || return
-	local item_path;	item_path=$(echo -E "${item:?}" | jq -Rr --arg db_location "${db_location:?}" 'if startswith("/") then . else ("\($db_location)/" + .) end') || return
-	local lock_code;	lock_code=$(cat <(echo "REMOVE:${item:?}:") <(head --bytes=8 -q /dev/urandom) | sha256sum -b - | awk '{ print $1 }') || return
+	local backup_destination;	backup_destination=$(get_config | jq -r --arg db_location "${db_location:?}" '.backup_destination|if startswith("/") then . else ("\($db_location)/" + .) end') || return
+	local item_path;	item_path=$(sqlite3 -readonly "${BACKUP_DB_PATH:?}" "SELECT ('${backup_destination:?}/' || \"fname\") FROM \"${BACKUP_DB_PREFIX}entries\" WHERE \"id\"=${entry_id:?}") || return
+	local lock_code;	lock_code=$(cat <(echo "REMOVE:${entry_id:?}:") <(head --bytes=8 -q /dev/urandom) | sha256sum -b - | awk '{ print $1 }') || return
 	acq_lock "${lock_code:?}" || return
 	if [ -e "${item_path:?}" ]; then
 		rm -f "${item_path:?}" || { local rcode=$?; rel_lock "${lock_code:?}"; return $rcode; }
@@ -336,15 +337,16 @@ process_remove_queue_item() {
 	# shellcheck disable=SC2016
 	local -r BACKUP_JQ_DBSTATEMENT_PROCESS_REMOVE_ITEM='( [
 		"PRAGMA journal_mode = TRUNCATE",
-		"DELETE FROM \"\($db_prefix)remove_queue\" WHERE \"path\"='\''\($item)'\''"
+		"DELETE FROM \"\($db_prefix)remove_queue\" WHERE \"entry_id\"=\($entry_id)",
+		"DELETE FROM \"\($db_prefix)entries\" WHERE \"id\"=\($entry_id)"
 	] )|join(";")'
-	local sql_statement;	sql_statement=$(jq -n -r --arg db_prefix "${BACKUP_DB_PREFIX}" --arg item "${item:?}" "${BACKUP_JQ_DBSTATEMENT_PROCESS_REMOVE_ITEM:?}") || { local rcode=$?; rel_lock "${lock_code:?}"; return $rcode; }
+	local sql_statement;	sql_statement=$(jq -n -r --arg db_prefix "${BACKUP_DB_PREFIX}" --arg entry_id "${entry_id:?}" "${BACKUP_JQ_DBSTATEMENT_PROCESS_REMOVE_ITEM:?}") || { local rcode=$?; rel_lock "${lock_code:?}"; return $rcode; }
 	sqlite3 "${BACKUP_DB_PATH:?}" "${sql_statement:?}" >/dev/null || { local rcode=$?; rel_lock "${lock_code:?}"; return $rcode; }
 	rel_lock "${lock_code:?}"
 }
 
 process_remove_queue() {
-	local remove_queue;	remove_queue=$(sqlite3 -json -readonly "${BACKUP_DB_PATH:?}" "SELECT \"path\" FROM \"${BACKUP_DB_PREFIX}remove_queue\"" | jq -c 'map(.path)') || return
+	local remove_queue;	remove_queue=$(sqlite3 -json -readonly "${BACKUP_DB_PATH:?}" "SELECT DISTINCT \"entry_id\" FROM \"${BACKUP_DB_PREFIX}remove_queue\"" | jq -c 'map(.entry_id)') || return
 	[ -n "$remove_queue" ] || remove_queue='[]'
 	for item in $(jq -n -r --argjson remove_queue "$remove_queue" '$remove_queue|.[]'); do
 		process_remove_queue_item "$item" || return
