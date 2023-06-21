@@ -291,7 +291,7 @@ update_keeplist() {
 
 process_add_queue_item() {
 	local entry_id=$1
-	[ "$(sqlite3 -readonly "${BACKUP_DB_PATH:?}" "SELECT COUNT(*) FROM \"${BACKUP_DB_PREFIX}add_queue\" WHERE \"entry_id\"=${entry_id:?}")" -gt 0 ] || { echo "Snapshotctl: Not exist entry ${entry_id} from add queue" >&2; return 1; }
+	[ "$(sqlite3 -readonly "${BACKUP_DB_PATH:?}" "SELECT COUNT(*) FROM \"${BACKUP_DB_PREFIX}add_queue\" WHERE \"entry_id\"=${entry_id:?}")" -gt 0 ] || { echo "snapshotctl: Not exist entry ${entry_id} from add queue" >&2; return 1; }
 
 	local lock_code;	lock_code=$(cat <(echo "ADD:${entry_id:?}:") <(head --bytes=8 -q /dev/urandom) | sha256sum -b - | awk '{ print $1 }') || return
 	acq_lock "${lock_code:?}" || return
