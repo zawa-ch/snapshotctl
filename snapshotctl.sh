@@ -25,7 +25,7 @@ __LICENSE__
 
 # SNAPSHOTCTL_BIN_LOCATION="$(cd "$(dirname "$0")" && pwd)" || exit
 # readonly SNAPSHOTCTL_BIN_LOCATION
-readonly SNAPSHOTCTL_DB_PREFIX='backup-'
+readonly SNAPSHOTCTL_DB_PREFIX='snapshotctl-'
 readonly SNAPSHOTCTL_DB_SCHEMA_REVISION=1
 
 #	---- 設定項目 ----
