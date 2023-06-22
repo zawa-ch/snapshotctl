@@ -23,10 +23,10 @@
 	SOFTWARE.
 __LICENSE__
 
-# BACKUP_BIN_LOCATION="$(cd "$(dirname "$0")" && pwd)" || exit
-# readonly BACKUP_BIN_LOCATION
-readonly BACKUP_DB_PREFIX='backup-'
-readonly BACKUP_DB_SCHEMA_REVISION=1
+# SNAPSHOTCTL_BIN_LOCATION="$(cd "$(dirname "$0")" && pwd)" || exit
+# readonly SNAPSHOTCTL_BIN_LOCATION
+readonly SNAPSHOTCTL_DB_PREFIX='backup-'
+readonly SNAPSHOTCTL_DB_SCHEMA_REVISION=1
 
 #	---- 設定項目 ----
 #	スクリプトの動作を変更する環境変数とそのデフォルトの値
@@ -35,22 +35,22 @@ readonly BACKUP_DB_SCHEMA_REVISION=1
 #	スナップショット管理ディレクトリのルート
 #	スナップショットを管理するためのデータベース等を配置する基点となるディレクトリ
 #	設定を省略した場合はこのディレクトリを基点にバックアップの構成を行う
-[ -n "$BACKUP_ROOT" ] || BACKUP_ROOT="/var/backup"
+[ -n "$SNAPSHOTCTL_ROOT" ] || SNAPSHOTCTL_ROOT="/var/backup"
 
 #	スナップショットデータベースのパス
 #	スナップショットを管理するデータベースのパスを指定する
-[ -n "$BACKUP_DB_PATH" ] || BACKUP_DB_PATH="${BACKUP_ROOT:?}/database.sqlite3"
+[ -n "$SNAPSHOTCTL_DB_PATH" ] || SNAPSHOTCTL_DB_PATH="${SNAPSHOTCTL_ROOT:?}/database.sqlite3"
 
 #	スナップショットのソースディレクトリ
 #	このディレクトリの中に存在する項目に対してスナップショットが作成される
 #	スナップショットデータベース作成時にこの設定が適用され、スナップショットデータベースに保存される
-[ -n "$BACKUP_SOURCE_PATH" ] || BACKUP_SOURCE_PATH="${BACKUP_ROOT:?}/source"
+[ -n "$SNAPSHOTCTL_SOURCE_PATH" ] || SNAPSHOTCTL_SOURCE_PATH="${SNAPSHOTCTL_ROOT:?}/source"
 
 #	スナップショットの保管ディレクトリ
 #	このディレクトリの中に作成したスナップショットを保管し、管理する
 #	ここで指定したパスが存在しない場合、自動的にディレクトリが作成される
 #	スナップショットデータベース作成時にこの設定が適用され、スナップショットデータベースに保存される
-[ -n "$BACKUP_DESTINATION_PATH" ] || BACKUP_DESTINATION_PATH="${BACKUP_ROOT:?}/snapshots"
+[ -n "$SNAPSHOTCTL_DESTINATION_PATH" ] || SNAPSHOTCTL_DESTINATION_PATH="${SNAPSHOTCTL_ROOT:?}/snapshots"
 
 #	スナップショットの作業用一時ディレクトリ
 #	このディレクトリの中にスナップショットの作成・管理に必要なデータを格納する
@@ -58,45 +58,45 @@ readonly BACKUP_DB_SCHEMA_REVISION=1
 #	このディレクトリの内容は各タスク終了時に削除される
 #	/tmpなどの一時ファイルシステムを使用してもよいが、無圧縮のスナップショットが格納できる程度のキャパシティが必要であることに注意が必要
 #	スナップショットデータベース作成時にこの設定が適用され、スナップショットデータベースに保存される
-[ -n "$BACKUP_WORKTMP_PATH" ] || BACKUP_WORKTMP_PATH="${BACKUP_ROOT:?}/temp"
+[ -n "$SNAPSHOTCTL_WORKTMP_PATH" ] || SNAPSHOTCTL_WORKTMP_PATH="${SNAPSHOTCTL_ROOT:?}/temp"
 
 #	スナップショット管理ルール
 #	作成したスナップショットはここで指定したルールに従って管理される
 #	ルールはJSONの特定の構造を持ったオブジェクトで記述する
 #	空のJSON配列を渡すことでルールベースの管理を無効化し、全エントリを保管するようになる
 #	スナップショットデータベース作成時にこの設定が適用され、スナップショットデータベースに保存される
-[ -n "$BACKUP_KEEP_RULES" ] || BACKUP_KEEP_RULES='{}'
+[ -n "$SNAPSHOTCTL_KEEP_RULES" ] || SNAPSHOTCTL_KEEP_RULES='{}'
 
 #	スナップショット作成前フック
 #	スナップショットを作成する前に実行するスクリプトを指定する
 #	ファイルが存在しない、または実行権限がないなどで実行できない場合は警告を発して処理を続行する
 #	スナップショットデータベース作成時にこの設定が適用され、スナップショットデータベースに保存される
-#	BACKUP_POST_SNAPSHOT_SCRIPT はこれらのスクリプトの使用を行わないことを true/false で指定する
+#	SNAPSHOTCTL_POST_SNAPSHOT_SCRIPT はこれらのスクリプトの使用を行わないことを true/false で指定する
 #	trueに指定した場合、スナップショットデータベースにはnullを設定する
-[ -n "$BACKUP_PRE_SNAPSHOT_SCRIPT" ] || BACKUP_PRE_SNAPSHOT_SCRIPT="${BACKUP_ROOT:?}/pre_snapshot.sh"
-[ -n "$BACKUP_NO_PRE_SNAPSHOT_SCRIPT" ] || BACKUP_NO_PRE_SNAPSHOT_SCRIPT='false'
+[ -n "$SNAPSHOTCTL_PRE_SNAPSHOT_SCRIPT" ] || SNAPSHOTCTL_PRE_SNAPSHOT_SCRIPT="${SNAPSHOTCTL_ROOT:?}/pre_snapshot.sh"
+[ -n "$SNAPSHOTCTL_NO_PRE_SNAPSHOT_SCRIPT" ] || SNAPSHOTCTL_NO_PRE_SNAPSHOT_SCRIPT='false'
 
 #	スナップショット作成後フック
 #	スナップショットを作成する後に実行するスクリプトを指定する
 #	ファイルが存在しない、または実行権限がないなどで実行できない場合は警告を発して処理を続行する
 #	スナップショットデータベース作成時にこの設定が適用され、スナップショットデータベースに保存される
-#	BACKUP_NO_POST_SNAPSHOT_SCRIPT はこれらのスクリプトの使用を行わないことを true/false で指定する
+#	SNAPSHOTCTL_NO_POST_SNAPSHOT_SCRIPT はこれらのスクリプトの使用を行わないことを true/false で指定する
 #	trueに指定した場合、スナップショットデータベースにはnullを設定する
-[ -n "$BACKUP_POST_SNAPSHOT_SCRIPT" ] || BACKUP_POST_SNAPSHOT_SCRIPT="${BACKUP_ROOT:?}/post_snapshot.sh"
-[ -n "$BACKUP_NO_POST_SNAPSHOT_SCRIPT" ] || BACKUP_NO_POST_SNAPSHOT_SCRIPT='false'
+[ -n "$SNAPSHOTCTL_POST_SNAPSHOT_SCRIPT" ] || SNAPSHOTCTL_POST_SNAPSHOT_SCRIPT="${SNAPSHOTCTL_ROOT:?}/post_snapshot.sh"
+[ -n "$SNAPSHOTCTL_NO_POST_SNAPSHOT_SCRIPT" ] || SNAPSHOTCTL_NO_POST_SNAPSHOT_SCRIPT='false'
 
 #	---- 設定項目ここまで ----
 
 check() {
 	local r
-	[ -e "${BACKUP_DB_PATH:?}" ]
+	[ -e "${SNAPSHOTCTL_DB_PATH:?}" ]
 	r=$?; [ $r -eq 0 ] || { jq -n -c '{ error: { code: "NOT_FOUND", message: "File not found." } }'; return $r; }
-	[ -f "${BACKUP_DB_PATH:?}" ]
+	[ -f "${SNAPSHOTCTL_DB_PATH:?}" ]
 	r=$?; [ $r -eq 0 ] || { jq -n -c '{ error: { code: "NOT_FILE", message: "Specified path exists, but not file." } }'; return $r; }
-	local db_rev;	db_rev=$(sqlite3 -readonly "${BACKUP_DB_PATH:?}" "SELECT \"schema_revision\" FROM \"${BACKUP_DB_PREFIX}metadata\" WHERE \"id\"=0")
+	local db_rev;	db_rev=$(sqlite3 -readonly "${SNAPSHOTCTL_DB_PATH:?}" "SELECT \"schema_revision\" FROM \"${SNAPSHOTCTL_DB_PREFIX}metadata\" WHERE \"id\"=0")
 	r=$?; [ $r -eq 0 ] || { jq -n -c '{ error: { code: "DB_ERROR", message: "SQLite3 returned with error." } }'; return $r; }
-	[ "${db_rev}" -le "${BACKUP_DB_SCHEMA_REVISION}" ] || { jq -n -c --argjson dbrev "$db_rev" --argjson suprev "$BACKUP_DB_SCHEMA_REVISION" '{ error: { code: "APP_OUTDATE", message: "Required update software.", db_version: $dbrev, support_version: $sup_rev } }'; return $r; }
-	[ "${db_rev}" -ge "${BACKUP_DB_SCHEMA_REVISION}" ] || { jq -n -c --argjson dbrev "$db_rev" --argjson suprev "$BACKUP_DB_SCHEMA_REVISION" '{ error: { code: "DB_OUTDATE", message: "Required update database.", db_version: $dbrev, support_version: $sup_rev } }'; return $r; }
+	[ "${db_rev}" -le "${SNAPSHOTCTL_DB_SCHEMA_REVISION}" ] || { jq -n -c --argjson dbrev "$db_rev" --argjson suprev "$SNAPSHOTCTL_DB_SCHEMA_REVISION" '{ error: { code: "APP_OUTDATE", message: "Required update software.", db_version: $dbrev, support_version: $sup_rev } }'; return $r; }
+	[ "${db_rev}" -ge "${SNAPSHOTCTL_DB_SCHEMA_REVISION}" ] || { jq -n -c --argjson dbrev "$db_rev" --argjson suprev "$SNAPSHOTCTL_DB_SCHEMA_REVISION" '{ error: { code: "DB_OUTDATE", message: "Required update database.", db_version: $dbrev, support_version: $sup_rev } }'; return $r; }
 	jq -n -c '{ error: null }'
 }
 
@@ -105,18 +105,18 @@ initialize() {
 	while (( $# > 0 )); do case $1 in
 		force)	force='true'; shift;;
 	esac done
-	if [ "$force" != 'true' ] && [ -e "${BACKUP_DB_PATH:?}" ]; then
+	if [ "$force" != 'true' ] && [ -e "${SNAPSHOTCTL_DB_PATH:?}" ]; then
 		echo "backupctl: Database already exists. If continue anyway, re-run with force switch." >&2
 		return 1
 	fi
-	if [ -e "${BACKUP_DB_PATH:?}" ]; then
-		rm -f "${BACKUP_DB_PATH:?}" || return
+	if [ -e "${SNAPSHOTCTL_DB_PATH:?}" ]; then
+		rm -f "${SNAPSHOTCTL_DB_PATH:?}" || return
 	fi
-	if [ -e "${BACKUP_DB_PATH:?}-journal" ]; then
-		rm -f "${BACKUP_DB_PATH:?}-journal" || return
+	if [ -e "${SNAPSHOTCTL_DB_PATH:?}-journal" ]; then
+		rm -f "${SNAPSHOTCTL_DB_PATH:?}-journal" || return
 	fi
 	# shellcheck disable=SC2016
-	local -r BACKUP_JQ_DBSTATEMENT_INIT='( [
+	local -r SNAPSHOTCTL_JQ_DBSTATEMENT_INIT='( [
 		"PRAGMA journal_mode = TRUNCATE",
 		"BEGIN TRANSACTION",
 		"CREATE TABLE \"\($db_prefix)metadata\" ( \"id\" INTEGER NOT NULL UNIQUE DEFAULT 0, \"schema_revision\" INTEGER NOT NULL, \"lock\" TEXT )",
@@ -161,67 +161,67 @@ initialize() {
 		"COMMIT TRANSACTION"
 	] )|join(";")'
 	local db_location
-	db_location=$(dirname "${BACKUP_DB_PATH:?}")
+	db_location=$(dirname "${SNAPSHOTCTL_DB_PATH:?}")
 	mkdir -p "${db_location}"
-	local r_source;	r_source=${BACKUP_SOURCE_PATH#"${db_location}/"}
-	local r_destination;	r_destination=${BACKUP_DESTINATION_PATH#"${db_location}/"}
-	local r_wtmp;	r_wtmp=${BACKUP_WORKTMP_PATH#"${db_location}/"}
-	local r_pre_snap;	r_pre_snap=${BACKUP_PRE_SNAPSHOT_SCRIPT#"${db_location}/"}
-	local r_post_snap;	r_post_snap=${BACKUP_POST_SNAPSHOT_SCRIPT#"${db_location}/"}
-	local sql_statement;	sql_statement=$(jq -n -r --arg db_prefix "${BACKUP_DB_PREFIX}" --argjson schema_rev "${BACKUP_DB_SCHEMA_REVISION:?}" --arg src "${r_source:?}" --arg dest "${r_destination:?}" --arg wtmp "${r_wtmp:?}" --arg presnap "${r_pre_snap}" --argjson no_presnap "${BACKUP_NO_PRE_SNAPSHOT_SCRIPT:?}" --arg postsnap "${r_post_snap}" --argjson no_postsnap "${BACKUP_NO_POST_SNAPSHOT_SCRIPT:?}" --argjson rules "${BACKUP_KEEP_RULES:?}" "${BACKUP_JQ_DBSTATEMENT_INIT:?}") || return
-	sqlite3 "${BACKUP_DB_PATH:?}" "${sql_statement:?}" >/dev/null || { local rcode=$?; rm -f "${BACKUP_DB_PATH:?}" "${BACKUP_DB_PATH:?}-journal"; return $rcode; }
+	local r_source;	r_source=${SNAPSHOTCTL_SOURCE_PATH#"${db_location}/"}
+	local r_destination;	r_destination=${SNAPSHOTCTL_DESTINATION_PATH#"${db_location}/"}
+	local r_wtmp;	r_wtmp=${SNAPSHOTCTL_WORKTMP_PATH#"${db_location}/"}
+	local r_pre_snap;	r_pre_snap=${SNAPSHOTCTL_PRE_SNAPSHOT_SCRIPT#"${db_location}/"}
+	local r_post_snap;	r_post_snap=${SNAPSHOTCTL_POST_SNAPSHOT_SCRIPT#"${db_location}/"}
+	local sql_statement;	sql_statement=$(jq -n -r --arg db_prefix "${SNAPSHOTCTL_DB_PREFIX}" --argjson schema_rev "${SNAPSHOTCTL_DB_SCHEMA_REVISION:?}" --arg src "${r_source:?}" --arg dest "${r_destination:?}" --arg wtmp "${r_wtmp:?}" --arg presnap "${r_pre_snap}" --argjson no_presnap "${SNAPSHOTCTL_NO_PRE_SNAPSHOT_SCRIPT:?}" --arg postsnap "${r_post_snap}" --argjson no_postsnap "${SNAPSHOTCTL_NO_POST_SNAPSHOT_SCRIPT:?}" --argjson rules "${SNAPSHOTCTL_KEEP_RULES:?}" "${SNAPSHOTCTL_JQ_DBSTATEMENT_INIT:?}") || return
+	sqlite3 "${SNAPSHOTCTL_DB_PATH:?}" "${sql_statement:?}" >/dev/null || { local rcode=$?; rm -f "${SNAPSHOTCTL_DB_PATH:?}" "${SNAPSHOTCTL_DB_PATH:?}-journal"; return $rcode; }
 }
 
 get_config() {
-	sqlite3 -readonly -json "${BACKUP_DB_PATH:?}" "SELECT \"key\", \"value\" FROM \"${BACKUP_DB_PREFIX}config\"" | jq -c 'from_entries|map_values(if type=="string" then fromjson else . end)'
+	sqlite3 -readonly -json "${SNAPSHOTCTL_DB_PATH:?}" "SELECT \"key\", \"value\" FROM \"${SNAPSHOTCTL_DB_PREFIX}config\"" | jq -c 'from_entries|map_values(if type=="string" then fromjson else . end)'
 }
 
 acq_lock() {
 	local lock_token=$1
 	# shellcheck disable=SC2016
-	local -r BACKUP_JQ_DBSTATEMENT_ACQ_LOCK='( [
+	local -r SNAPSHOTCTL_JQ_DBSTATEMENT_ACQ_LOCK='( [
 		"PRAGMA journal_mode = TRUNCATE",
 		"UPDATE \"\($db_prefix)metadata\" SET \"lock\"='\''\($lt)'\'' WHERE \"id\"=0 AND \"lock\" IS NULL"
 	] )|join(";")'
-	sqlite3 "${BACKUP_DB_PATH:?}" "$(jq -n -r --arg db_prefix "${BACKUP_DB_PREFIX}" --arg lt "${lock_token:?}" "${BACKUP_JQ_DBSTATEMENT_ACQ_LOCK:?}")" >/dev/null || return
-	[ "$(sqlite3 -readonly "${BACKUP_DB_PATH:?}" "SELECT \"lock\"='${lock_token:?}' FROM \"${BACKUP_DB_PREFIX:?}metadata\" WHERE \"id\"=0")" -ne 0 ]
+	sqlite3 "${SNAPSHOTCTL_DB_PATH:?}" "$(jq -n -r --arg db_prefix "${SNAPSHOTCTL_DB_PREFIX}" --arg lt "${lock_token:?}" "${SNAPSHOTCTL_JQ_DBSTATEMENT_ACQ_LOCK:?}")" >/dev/null || return
+	[ "$(sqlite3 -readonly "${SNAPSHOTCTL_DB_PATH:?}" "SELECT \"lock\"='${lock_token:?}' FROM \"${SNAPSHOTCTL_DB_PREFIX:?}metadata\" WHERE \"id\"=0")" -ne 0 ]
 }
 
 rel_lock() {
 	local lock_token=$1
 	# shellcheck disable=SC2016
-	local -r BACKUP_JQ_DBSTATEMENT_REL_LOCK='( [
+	local -r SNAPSHOTCTL_JQ_DBSTATEMENT_REL_LOCK='( [
 		"PRAGMA journal_mode = TRUNCATE",
 		"UPDATE \"\($db_prefix)metadata\" SET \"lock\"=NULL WHERE \"id\"=0 AND \"lock\"='\''\($lt)'\''"
 	] )|join(";")'
-	sqlite3 "${BACKUP_DB_PATH:?}" "$(jq -n -r --arg db_prefix "${BACKUP_DB_PREFIX}" --arg lt "${lock_token:?}" "${BACKUP_JQ_DBSTATEMENT_REL_LOCK:?}")" >/dev/null || return
-	[ "$(sqlite3 -readonly "${BACKUP_DB_PATH:?}" "SELECT \"lock\" IS NULL FROM \"${BACKUP_DB_PREFIX:?}metadata\" WHERE \"id\"=0")" -ne 0 ]
+	sqlite3 "${SNAPSHOTCTL_DB_PATH:?}" "$(jq -n -r --arg db_prefix "${SNAPSHOTCTL_DB_PREFIX}" --arg lt "${lock_token:?}" "${SNAPSHOTCTL_JQ_DBSTATEMENT_REL_LOCK:?}")" >/dev/null || return
+	[ "$(sqlite3 -readonly "${SNAPSHOTCTL_DB_PATH:?}" "SELECT \"lock\" IS NULL FROM \"${SNAPSHOTCTL_DB_PREFIX:?}metadata\" WHERE \"id\"=0")" -ne 0 ]
 }
 
 rm_lock() {
 	# shellcheck disable=SC2016
-	local -r BACKUP_JQ_DBSTATEMENT_RM_LOCK='( [
+	local -r SNAPSHOTCTL_JQ_DBSTATEMENT_RM_LOCK='( [
 		"PRAGMA journal_mode = TRUNCATE",
 		"UPDATE \"\($db_prefix)metadata\" SET \"lock\"=NULL WHERE \"id\"=0"
 	] )|join(";")'
-	sqlite3 "${BACKUP_DB_PATH:?}" "$(jq -n -r --arg db_prefix "${BACKUP_DB_PREFIX}" "${BACKUP_JQ_DBSTATEMENT_RM_LOCK:?}")" >/dev/null || return
-	[ "$(sqlite3 -readonly "${BACKUP_DB_PATH:?}" "SELECT \"lock\" IS NULL FROM \"${BACKUP_DB_PREFIX:?}metadata\" WHERE \"id\"=0")" -ne 0 ]
+	sqlite3 "${SNAPSHOTCTL_DB_PATH:?}" "$(jq -n -r --arg db_prefix "${SNAPSHOTCTL_DB_PREFIX}" "${SNAPSHOTCTL_JQ_DBSTATEMENT_RM_LOCK:?}")" >/dev/null || return
+	[ "$(sqlite3 -readonly "${SNAPSHOTCTL_DB_PATH:?}" "SELECT \"lock\" IS NULL FROM \"${SNAPSHOTCTL_DB_PREFIX:?}metadata\" WHERE \"id\"=0")" -ne 0 ]
 }
 
 do_lock() {
 	local lock_token=$1
 	shift
 	# shellcheck disable=SC2016
-	local -r BACKUP_JQ_DBSTATEMENT_GET_LOCK='( [
+	local -r SNAPSHOTCTL_JQ_DBSTATEMENT_GET_LOCK='( [
 		"SELECT \"lock\"='\''\($lt)'\'' FROM \"\($db_prefix)metadata\" WHERE \"id\"=0"
 	] )|join(";")'
-	result=$(sqlite3 -readonly "${BACKUP_DB_PATH:?}" "$(jq -n -r --arg db_prefix "${BACKUP_DB_PREFIX}" --arg lt "${lock_token:?}" "${BACKUP_JQ_DBSTATEMENT_GET_LOCK:?}")") || return
+	result=$(sqlite3 -readonly "${SNAPSHOTCTL_DB_PATH:?}" "$(jq -n -r --arg db_prefix "${SNAPSHOTCTL_DB_PREFIX}" --arg lt "${lock_token:?}" "${SNAPSHOTCTL_JQ_DBSTATEMENT_GET_LOCK:?}")") || return
 	[ "${result:?}" -ne 0 ] || return
 	"$@"
 }
 
 create_snapshot() {
-	local db_location;	db_location=$(cd "$(dirname "${BACKUP_DB_PATH:?}")" && pwd) || return
+	local db_location;	db_location=$(cd "$(dirname "${SNAPSHOTCTL_DB_PATH:?}")" && pwd) || return
 	local backup_source;	backup_source=$(get_config | jq -r --arg db_location "${db_location:?}" '.backup_source|if startswith("/") then . else ("\($db_location)/" + .) end') || return
 	(cd "${backup_source:?}") || return
 	local backup_destination;	backup_destination=$(get_config | jq -r --arg db_location "${db_location:?}" '.backup_destination|if startswith("/") then . else ("\($db_location)/" + .) end') || return
@@ -254,25 +254,25 @@ create_snapshot() {
 	[ -e "${backup_destination:?}" ] || { do_lock "${lock_code:?}" mkdir -p "${backup_destination:?}"; }
 	do_lock "${lock_code:?}" mv --no-clobber --target-directory="${backup_destination:?}/" "${worktmp:?}/${snapshot_filename:?}" || { local rcode=$?; rel_lock "${lock_code:?}"; return $rcode; }
 	# shellcheck disable=SC2016
-	local -r BACKUP_JQ_DBSTATEMENT_CREATE='( [
+	local -r SNAPSHOTCTL_JQ_DBSTATEMENT_CREATE='( [
 		"PRAGMA journal_mode = TRUNCATE",
 		"BEGIN TRANSACTION",
 		"INSERT INTO \"\($db_prefix)entries\"( \"date\", \"fname\", \"size\", \"sha256\", \"type\" ) VALUES ( \($date), '\''\($fname)'\'', \($size), '\''\($sha256)'\'', '\''plain'\'' )",
 		"INSERT INTO \"\($db_prefix)add_queue\"( \"entry_id\" ) VALUES ( ( SELECT MAX(\"id\") FROM \"\($db_prefix)entries\" ) )",
 		"COMMIT TRANSACTION"
 	] )|join(";")'
-	local sql_statement;	sql_statement=$(jq -n -r --arg db_prefix "${BACKUP_DB_PREFIX}" --argjson date "${create_time:?}" --arg fname "${snapshot_filename:?}" --argjson size "${size:?}" --arg sha256 "${checksum:?}" "${BACKUP_JQ_DBSTATEMENT_CREATE:?}") || { local rcode=$?; rel_lock "${lock_code:?}"; return $rcode; }
-	sqlite3 "${BACKUP_DB_PATH:?}" "${sql_statement:?}" >/dev/null || { local rcode=$?; rel_lock "${lock_code:?}"; return $rcode; }
+	local sql_statement;	sql_statement=$(jq -n -r --arg db_prefix "${SNAPSHOTCTL_DB_PREFIX}" --argjson date "${create_time:?}" --arg fname "${snapshot_filename:?}" --argjson size "${size:?}" --arg sha256 "${checksum:?}" "${SNAPSHOTCTL_JQ_DBSTATEMENT_CREATE:?}") || { local rcode=$?; rel_lock "${lock_code:?}"; return $rcode; }
+	sqlite3 "${SNAPSHOTCTL_DB_PATH:?}" "${sql_statement:?}" >/dev/null || { local rcode=$?; rel_lock "${lock_code:?}"; return $rcode; }
 	rel_lock "${lock_code:?}"
 }
 
 update_keeplist() {
 	local lock_code;	lock_code=$(cat <(echo "UPDATE:") <(head --bytes=8 -q /dev/urandom) | sha256sum -b - | awk '{ print $1 }') || return
 	acq_lock "${lock_code:?}" || return
-	local rules;	rules=$(do_lock "${lock_code:?}" sqlite3 -json -readonly "${BACKUP_DB_PATH:?}" "SELECT * FROM \"${BACKUP_DB_PREFIX}keeprules\"") || return
+	local rules;	rules=$(do_lock "${lock_code:?}" sqlite3 -json -readonly "${SNAPSHOTCTL_DB_PATH:?}" "SELECT * FROM \"${SNAPSHOTCTL_DB_PREFIX}keeprules\"") || return
 	[ -n "$rules" ] || rules='[]'
 	# shellcheck disable=SC2016
-	local -r BACKUP_JQ_DBSTATEMENT_UPDATE='( [
+	local -r SNAPSHOTCTL_JQ_DBSTATEMENT_UPDATE='( [
 		"PRAGMA journal_mode = TRUNCATE",
 		"BEGIN TRANSACTION"
 	] + (
@@ -287,23 +287,23 @@ update_keeplist() {
 		"DELETE FROM \"\($db_prefix)filter_queue\" WHERE \"entry_id\" NOT IN (SELECT \"id\" FROM \"\($db_prefix)entries\")",
 		"COMMIT TRANSACTION"
 	] )|join(";")'
-	local sql_statement;	sql_statement=$(jq -n -r --arg db_prefix "${BACKUP_DB_PREFIX}" --argjson rules "${rules:?}" "${BACKUP_JQ_DBSTATEMENT_UPDATE:?}") || { local rcode=$?; rel_lock "${lock_code:?}"; return $rcode; }
-	sqlite3 "${BACKUP_DB_PATH:?}" "${sql_statement:?}" >/dev/null || { local rcode=$?; rel_lock "${lock_code:?}"; return $rcode; }
+	local sql_statement;	sql_statement=$(jq -n -r --arg db_prefix "${SNAPSHOTCTL_DB_PREFIX}" --argjson rules "${rules:?}" "${SNAPSHOTCTL_JQ_DBSTATEMENT_UPDATE:?}") || { local rcode=$?; rel_lock "${lock_code:?}"; return $rcode; }
+	sqlite3 "${SNAPSHOTCTL_DB_PATH:?}" "${sql_statement:?}" >/dev/null || { local rcode=$?; rel_lock "${lock_code:?}"; return $rcode; }
 	rel_lock "${lock_code:?}"
 }
 
 process_add_queue_item() {
 	local entry_id=$1
-	[ "$(sqlite3 -readonly "${BACKUP_DB_PATH:?}" "SELECT COUNT(*) FROM \"${BACKUP_DB_PREFIX}add_queue\" WHERE \"entry_id\"=${entry_id:?}")" -gt 0 ] || { echo "snapshotctl: Not exist entry ${entry_id} from add queue" >&2; return 1; }
+	[ "$(sqlite3 -readonly "${SNAPSHOTCTL_DB_PATH:?}" "SELECT COUNT(*) FROM \"${SNAPSHOTCTL_DB_PREFIX}add_queue\" WHERE \"entry_id\"=${entry_id:?}")" -gt 0 ] || { echo "snapshotctl: Not exist entry ${entry_id} from add queue" >&2; return 1; }
 
 	local lock_code;	lock_code=$(cat <(echo "ADD:${entry_id:?}:") <(head --bytes=8 -q /dev/urandom) | sha256sum -b - | awk '{ print $1 }') || return
 	acq_lock "${lock_code:?}" || return
-	local entry;	entry=$(do_lock "${lock_code:?}" sqlite3 -json -readonly "${BACKUP_DB_PATH:?}" "SELECT \"${BACKUP_DB_PREFIX}entries\".* FROM \"${BACKUP_DB_PREFIX}add_queue\" LEFT JOIN \"${BACKUP_DB_PREFIX}entries\" ON \"${BACKUP_DB_PREFIX}add_queue\".\"entry_id\"=\"${BACKUP_DB_PREFIX}entries\".\"id\"" | jq -c '.[0]') || { local rcode=$?; rel_lock "${lock_code:?}"; return $rcode; }
-	local latest_entry;	latest_entry=$(do_lock "${lock_code:?}" sqlite3 -json -readonly "${BACKUP_DB_PATH:?}" "SELECT * FROM \"${BACKUP_DB_PREFIX}keep-entry-latests\"" | jq -c 'map({ key: .rule, value: del(.rule) })|from_entries') || { local rcode=$?; rel_lock "${lock_code:?}"; return $rcode; }
+	local entry;	entry=$(do_lock "${lock_code:?}" sqlite3 -json -readonly "${SNAPSHOTCTL_DB_PATH:?}" "SELECT \"${SNAPSHOTCTL_DB_PREFIX}entries\".* FROM \"${SNAPSHOTCTL_DB_PREFIX}add_queue\" LEFT JOIN \"${SNAPSHOTCTL_DB_PREFIX}entries\" ON \"${SNAPSHOTCTL_DB_PREFIX}add_queue\".\"entry_id\"=\"${SNAPSHOTCTL_DB_PREFIX}entries\".\"id\"" | jq -c '.[0]') || { local rcode=$?; rel_lock "${lock_code:?}"; return $rcode; }
+	local latest_entry;	latest_entry=$(do_lock "${lock_code:?}" sqlite3 -json -readonly "${SNAPSHOTCTL_DB_PATH:?}" "SELECT * FROM \"${SNAPSHOTCTL_DB_PREFIX}keep-entry-latests\"" | jq -c 'map({ key: .rule, value: del(.rule) })|from_entries') || { local rcode=$?; rel_lock "${lock_code:?}"; return $rcode; }
 	[ -n "${latest_entry}" ] || latest_entry='{}'
-	local rules;	rules=$(do_lock "${lock_code:?}" sqlite3 -json -readonly "${BACKUP_DB_PATH:?}" "SELECT * FROM \"${BACKUP_DB_PREFIX}keeprules\"" | jq -c --argjson latest "${latest_entry:?}" 'map(.name as $rule_name|. + { latest: ($latest|.[$rule_name]) })') || { local rcode=$?; rel_lock "${lock_code:?}"; return $rcode; }
+	local rules;	rules=$(do_lock "${lock_code:?}" sqlite3 -json -readonly "${SNAPSHOTCTL_DB_PATH:?}" "SELECT * FROM \"${SNAPSHOTCTL_DB_PREFIX}keeprules\"" | jq -c --argjson latest "${latest_entry:?}" 'map(.name as $rule_name|. + { latest: ($latest|.[$rule_name]) })') || { local rcode=$?; rel_lock "${lock_code:?}"; return $rcode; }
 	# shellcheck disable=SC2016
-	local -r BACKUP_JQ_DBSTATEMENT_PROCESS_ADD_ITEM='( [
+	local -r SNAPSHOTCTL_JQ_DBSTATEMENT_PROCESS_ADD_ITEM='( [
 		"PRAGMA journal_mode = TRUNCATE",
 		"BEGIN TRANSACTION"
 	] +
@@ -313,13 +313,13 @@ process_add_queue_item() {
 		"DELETE FROM \"\($db_prefix)add_queue\" WHERE \"entry_id\"=\($entry|.id)",
 		"COMMIT TRANSACTION"
 	] )|join(";")'
-	local sql_statement;	sql_statement=$(jq -n -r --arg db_prefix "${BACKUP_DB_PREFIX}" --argjson rules "${rules:?}" --argjson entry "${entry:?}" "${BACKUP_JQ_DBSTATEMENT_PROCESS_ADD_ITEM:?}") || { local rcode=$?; rel_lock "${lock_code:?}"; return $rcode; }
-	sqlite3 "${BACKUP_DB_PATH:?}" "${sql_statement:?}" >/dev/null || { local rcode=$?; rel_lock "${lock_code:?}"; return $rcode; }
+	local sql_statement;	sql_statement=$(jq -n -r --arg db_prefix "${SNAPSHOTCTL_DB_PREFIX}" --argjson rules "${rules:?}" --argjson entry "${entry:?}" "${SNAPSHOTCTL_JQ_DBSTATEMENT_PROCESS_ADD_ITEM:?}") || { local rcode=$?; rel_lock "${lock_code:?}"; return $rcode; }
+	sqlite3 "${SNAPSHOTCTL_DB_PATH:?}" "${sql_statement:?}" >/dev/null || { local rcode=$?; rel_lock "${lock_code:?}"; return $rcode; }
 	rel_lock "${lock_code:?}"
 }
 
 process_add_queue() {
-	local add_queue;	add_queue=$(sqlite3 -json -readonly "${BACKUP_DB_PATH:?}" "SELECT \"entry_id\" FROM \"${BACKUP_DB_PREFIX}add_queue\" LEFT JOIN \"${BACKUP_DB_PREFIX}entries\" ON \"${BACKUP_DB_PREFIX}add_queue\".\"entry_id\"=\"${BACKUP_DB_PREFIX}entries\".\"id\" ORDER BY \"${BACKUP_DB_PREFIX}entries\".\"date\" ASC" | jq -c 'map(.entry_id)') || return
+	local add_queue;	add_queue=$(sqlite3 -json -readonly "${SNAPSHOTCTL_DB_PATH:?}" "SELECT \"entry_id\" FROM \"${SNAPSHOTCTL_DB_PREFIX}add_queue\" LEFT JOIN \"${SNAPSHOTCTL_DB_PREFIX}entries\" ON \"${SNAPSHOTCTL_DB_PREFIX}add_queue\".\"entry_id\"=\"${SNAPSHOTCTL_DB_PREFIX}entries\".\"id\" ORDER BY \"${SNAPSHOTCTL_DB_PREFIX}entries\".\"date\" ASC" | jq -c 'map(.entry_id)') || return
 	[ -n "$add_queue" ] || add_queue='[]'
 	for entry_id in $(jq -n -c --argjson add_queue "$add_queue" '$add_queue|.[]'); do
 		process_add_queue_item "$entry_id" || return
@@ -328,31 +328,31 @@ process_add_queue() {
 
 process_remove_queue_item() {
 	local entry_id=$1
-	[ "$(sqlite3 -readonly "${BACKUP_DB_PATH:?}" "SELECT COUNT(*) FROM \"${BACKUP_DB_PREFIX}remove_queue\" WHERE \"entry_id\"=${entry_id:?}")" -gt 0 ] || { echo "Snapshotctl: Not exist entry ${entry_id} from remove queue" >&2; return 1; }
+	[ "$(sqlite3 -readonly "${SNAPSHOTCTL_DB_PATH:?}" "SELECT COUNT(*) FROM \"${SNAPSHOTCTL_DB_PREFIX}remove_queue\" WHERE \"entry_id\"=${entry_id:?}")" -gt 0 ] || { echo "Snapshotctl: Not exist entry ${entry_id} from remove queue" >&2; return 1; }
 
-	local db_location;	db_location=$(cd "$(dirname "${BACKUP_DB_PATH:?}")" && pwd) || return
+	local db_location;	db_location=$(cd "$(dirname "${SNAPSHOTCTL_DB_PATH:?}")" && pwd) || return
 	local backup_destination;	backup_destination=$(get_config | jq -r --arg db_location "${db_location:?}" '.backup_destination|if startswith("/") then . else ("\($db_location)/" + .) end') || return
-	local item_path;	item_path=$(sqlite3 -readonly "${BACKUP_DB_PATH:?}" "SELECT ('${backup_destination:?}/' || \"fname\") FROM \"${BACKUP_DB_PREFIX}entries\" WHERE \"id\"=${entry_id:?}") || return
+	local item_path;	item_path=$(sqlite3 -readonly "${SNAPSHOTCTL_DB_PATH:?}" "SELECT ('${backup_destination:?}/' || \"fname\") FROM \"${SNAPSHOTCTL_DB_PREFIX}entries\" WHERE \"id\"=${entry_id:?}") || return
 	local lock_code;	lock_code=$(cat <(echo "REMOVE:${entry_id:?}:") <(head --bytes=8 -q /dev/urandom) | sha256sum -b - | awk '{ print $1 }') || return
 	acq_lock "${lock_code:?}" || return
 	if [ -e "${item_path:?}" ]; then
 		rm -f "${item_path:?}" || { local rcode=$?; rel_lock "${lock_code:?}"; return $rcode; }
 	fi
 	# shellcheck disable=SC2016
-	local -r BACKUP_JQ_DBSTATEMENT_PROCESS_REMOVE_ITEM='( [
+	local -r SNAPSHOTCTL_JQ_DBSTATEMENT_PROCESS_REMOVE_ITEM='( [
 		"PRAGMA journal_mode = TRUNCATE",
 		"DELETE FROM \"\($db_prefix)add_queue\" WHERE \"entry_id\"=\($entry_id)",
 		"DELETE FROM \"\($db_prefix)filter_queue\" WHERE \"entry_id\"=\($entry_id)",
 		"DELETE FROM \"\($db_prefix)remove_queue\" WHERE \"entry_id\"=\($entry_id)",
 		"DELETE FROM \"\($db_prefix)entries\" WHERE \"id\"=\($entry_id)"
 	] )|join(";")'
-	local sql_statement;	sql_statement=$(jq -n -r --arg db_prefix "${BACKUP_DB_PREFIX}" --arg entry_id "${entry_id:?}" "${BACKUP_JQ_DBSTATEMENT_PROCESS_REMOVE_ITEM:?}") || { local rcode=$?; rel_lock "${lock_code:?}"; return $rcode; }
-	sqlite3 "${BACKUP_DB_PATH:?}" "${sql_statement:?}" >/dev/null || { local rcode=$?; rel_lock "${lock_code:?}"; return $rcode; }
+	local sql_statement;	sql_statement=$(jq -n -r --arg db_prefix "${SNAPSHOTCTL_DB_PREFIX}" --arg entry_id "${entry_id:?}" "${SNAPSHOTCTL_JQ_DBSTATEMENT_PROCESS_REMOVE_ITEM:?}") || { local rcode=$?; rel_lock "${lock_code:?}"; return $rcode; }
+	sqlite3 "${SNAPSHOTCTL_DB_PATH:?}" "${sql_statement:?}" >/dev/null || { local rcode=$?; rel_lock "${lock_code:?}"; return $rcode; }
 	rel_lock "${lock_code:?}"
 }
 
 process_remove_queue() {
-	local remove_queue;	remove_queue=$(sqlite3 -json -readonly "${BACKUP_DB_PATH:?}" "SELECT DISTINCT \"entry_id\" FROM \"${BACKUP_DB_PREFIX}remove_queue\"" | jq -c 'map(.entry_id)') || return
+	local remove_queue;	remove_queue=$(sqlite3 -json -readonly "${SNAPSHOTCTL_DB_PATH:?}" "SELECT DISTINCT \"entry_id\" FROM \"${SNAPSHOTCTL_DB_PREFIX}remove_queue\"" | jq -c 'map(.entry_id)') || return
 	[ -n "$remove_queue" ] || remove_queue='[]'
 	for item in $(jq -n -r --argjson remove_queue "$remove_queue" '$remove_queue|.[]'); do
 		process_remove_queue_item "$item" || return
@@ -362,10 +362,10 @@ process_remove_queue() {
 filter_encode() {
 	local lock_code=$1
 	local entry_id=$2
-	[ "$(sqlite3 -readonly "${BACKUP_DB_PATH:?}" "SELECT COUNT(*) FROM \"${BACKUP_DB_PREFIX}filter_queue\" WHERE \"entry_id\"=${entry_id:?}")" -gt 0 ] || { echo '{"return_code":1,"error":{"code":"ENTRY_NOT_EXIST","message":"Entry '"${entry_id}"' does not exist."}}'; return; }
+	[ "$(sqlite3 -readonly "${SNAPSHOTCTL_DB_PATH:?}" "SELECT COUNT(*) FROM \"${SNAPSHOTCTL_DB_PREFIX}filter_queue\" WHERE \"entry_id\"=${entry_id:?}")" -gt 0 ] || { echo '{"return_code":1,"error":{"code":"ENTRY_NOT_EXIST","message":"Entry '"${entry_id}"' does not exist."}}'; return; }
 	local fname=$3
 	local filter=$4
-	local db_location;	db_location=$(cd "$(dirname "${BACKUP_DB_PATH:?}")" && pwd) || { echo '{"error":{"code":"CANNOT_LOCATE_DATABASE_LOCATION","message":"Couldn'\''t locate DB location."}}'; return; }
+	local db_location;	db_location=$(cd "$(dirname "${SNAPSHOTCTL_DB_PATH:?}")" && pwd) || { echo '{"error":{"code":"CANNOT_LOCATE_DATABASE_LOCATION","message":"Couldn'\''t locate DB location."}}'; return; }
 	local backup_destination;	backup_destination=$(get_config | jq -r --arg db_location "${db_location:?}" '.backup_destination|if startswith("/") then . else ("\($db_location)/" + .) end') || { echo '{"error":{"code":"CANNOT_LOCATE_SNAPSHOT_DIRECTORY","message":"Couldn'\''t locate snapshot directory."}}'; return; }
 	local worktmp;	worktmp=$(get_config | jq -r --arg db_location "${db_location:?}" '.worktmp|if startswith("/") then . else ("\($db_location)/" + .) end') || { echo '{"error":{"code":"CANNOT_LOCATE_WORKTMP","message":"Couldn'\''t locate working temp directory."}}'; return; }
 	case $filter in
@@ -389,10 +389,10 @@ filter_encode() {
 filter_decode() {
 	local lock_code=$1
 	local entry_id=$2
-	[ "$(sqlite3 -readonly "${BACKUP_DB_PATH:?}" "SELECT COUNT(*) FROM \"${BACKUP_DB_PREFIX}filter_queue\" WHERE \"entry_id\"=${entry_id:?}")" -gt 0 ] || { echo '{"return_code":1,"error":{"code":"ENTRY_NOT_EXIST","message":"Entry '"${entry_id}"' does not exist"}}'; return 1; }
+	[ "$(sqlite3 -readonly "${SNAPSHOTCTL_DB_PATH:?}" "SELECT COUNT(*) FROM \"${SNAPSHOTCTL_DB_PREFIX}filter_queue\" WHERE \"entry_id\"=${entry_id:?}")" -gt 0 ] || { echo '{"return_code":1,"error":{"code":"ENTRY_NOT_EXIST","message":"Entry '"${entry_id}"' does not exist"}}'; return 1; }
 	local fname=$3
 	local filter=$4
-	local db_location;	db_location=$(cd "$(dirname "${BACKUP_DB_PATH:?}")" && pwd) || { echo '{"error":{"code":"CANNOT_LOCATE_DATABASE_LOCATION","message":"Couldn'\''t locate DB location"}}'; return 1; }
+	local db_location;	db_location=$(cd "$(dirname "${SNAPSHOTCTL_DB_PATH:?}")" && pwd) || { echo '{"error":{"code":"CANNOT_LOCATE_DATABASE_LOCATION","message":"Couldn'\''t locate DB location"}}'; return 1; }
 	local backup_destination;	backup_destination=$(get_config | jq -r --arg db_location "${db_location:?}" '.backup_destination|if startswith("/") then . else ("\($db_location)/" + .) end') || { echo '{"error":{"code":"CANNOT_LOCATE_SNAPSHOT_DIRECTORY","message":"Couldn'\''t locate snapshot directory."}}'; return 1; }
 	local worktmp;	worktmp=$(get_config | jq -r --arg db_location "${db_location:?}" '.worktmp|if startswith("/") then . else ("\($db_location)/" + .) end') || { echo '{"error":{"code":"CANNOT_LOCATE_WORKTMP","message":"Couldn'\''t locate working temp directory."}}'; return 1; }
 	case $filter in
@@ -415,15 +415,15 @@ filter_decode() {
 
 process_filter_queue_item() {
 	local entry_id=$1
-	[ "$(sqlite3 -readonly "${BACKUP_DB_PATH:?}" "SELECT COUNT(*) FROM \"${BACKUP_DB_PREFIX}filter_queue\" WHERE \"entry_id\"=${entry_id:?}")" -gt 0 ] || { echo "snapshotctl: Not exist entry ${entry_id} from compression queue" >&2; return 1; }
-	local db_location;	db_location=$(cd "$(dirname "${BACKUP_DB_PATH:?}")" && pwd) || return
+	[ "$(sqlite3 -readonly "${SNAPSHOTCTL_DB_PATH:?}" "SELECT COUNT(*) FROM \"${SNAPSHOTCTL_DB_PREFIX}filter_queue\" WHERE \"entry_id\"=${entry_id:?}")" -gt 0 ] || { echo "snapshotctl: Not exist entry ${entry_id} from compression queue" >&2; return 1; }
+	local db_location;	db_location=$(cd "$(dirname "${SNAPSHOTCTL_DB_PATH:?}")" && pwd) || return
 	local backup_destination;	backup_destination=$(get_config | jq -r --arg db_location "${db_location:?}" '.backup_destination|if startswith("/") then . else ("\($db_location)/" + .) end') || return
 	local worktmp;	worktmp=$(get_config | jq -r --arg db_location "${db_location:?}" '.worktmp|if startswith("/") then . else ("\($db_location)/" + .) end') || return
-	local convert_type;	convert_type=$(sqlite3 -json -readonly "${BACKUP_DB_PATH:?}" "SELECT \"${BACKUP_DB_PREFIX}keeprules\".* FROM \"${BACKUP_DB_PREFIX}keeplist\" LEFT JOIN \"${BACKUP_DB_PREFIX}keeprules\" ON \"${BACKUP_DB_PREFIX}keeplist\".\"rule\" = \"${BACKUP_DB_PREFIX}keeprules\".\"name\" WHERE \"entry_id\" = ${entry_id:?}" | jq -r 'def is_plain: (type == "null") or (type == "string" and . == "plain"); def is_compress: (type == "string") and ( . as $value|[ "gzip", "zstd", "xz" ]|map(. == $value)|any ); def is_difference: (type == "string") and (split("|")|.[0] == "rdiff") and (split("|")|map(is_plain or is_compress or . == "rdiff")|all); def is_valid: is_plain or is_compress or is_difference; if (map(.store_type|is_valid|not)|any) then ("snapshotctl: Invalid store type found. Please check config.\n"|halt_error) elif (map(.store_type|is_plain)|any) then "plain" elif (map(.store_type|is_compress)|any) then (map(select(.store_type|is_compress))|sort_by(.bind_duration)|reverse|.[0].store_type) else (sort_by(.bind_duration)|reverse|.[0].store_type) end') || return
-	local fname;	fname=$(sqlite3 -readonly "${BACKUP_DB_PATH:?}" "SELECT \"fname\" FROM \"${BACKUP_DB_PREFIX}entries\" WHERE \"id\"=${entry_id:?}") || return
-	local item_type;	item_type=$(sqlite3 -readonly "${BACKUP_DB_PATH:?}" "SELECT \"type\" FROM \"${BACKUP_DB_PREFIX}entries\" WHERE \"id\"=${entry_id:?}") || return
+	local convert_type;	convert_type=$(sqlite3 -json -readonly "${SNAPSHOTCTL_DB_PATH:?}" "SELECT \"${SNAPSHOTCTL_DB_PREFIX}keeprules\".* FROM \"${SNAPSHOTCTL_DB_PREFIX}keeplist\" LEFT JOIN \"${SNAPSHOTCTL_DB_PREFIX}keeprules\" ON \"${SNAPSHOTCTL_DB_PREFIX}keeplist\".\"rule\" = \"${SNAPSHOTCTL_DB_PREFIX}keeprules\".\"name\" WHERE \"entry_id\" = ${entry_id:?}" | jq -r 'def is_plain: (type == "null") or (type == "string" and . == "plain"); def is_compress: (type == "string") and ( . as $value|[ "gzip", "zstd", "xz" ]|map(. == $value)|any ); def is_difference: (type == "string") and (split("|")|.[0] == "rdiff") and (split("|")|map(is_plain or is_compress or . == "rdiff")|all); def is_valid: is_plain or is_compress or is_difference; if (map(.store_type|is_valid|not)|any) then ("snapshotctl: Invalid store type found. Please check config.\n"|halt_error) elif (map(.store_type|is_plain)|any) then "plain" elif (map(.store_type|is_compress)|any) then (map(select(.store_type|is_compress))|sort_by(.bind_duration)|reverse|.[0].store_type) else (sort_by(.bind_duration)|reverse|.[0].store_type) end') || return
+	local fname;	fname=$(sqlite3 -readonly "${SNAPSHOTCTL_DB_PATH:?}" "SELECT \"fname\" FROM \"${SNAPSHOTCTL_DB_PREFIX}entries\" WHERE \"id\"=${entry_id:?}") || return
+	local item_type;	item_type=$(sqlite3 -readonly "${SNAPSHOTCTL_DB_PATH:?}" "SELECT \"type\" FROM \"${SNAPSHOTCTL_DB_PREFIX}entries\" WHERE \"id\"=${entry_id:?}") || return
 	if [ "${item_type:?}" == "${convert_type:?}" ]; then
-		sqlite3 "${BACKUP_DB_PATH:?}" "PRAGMA journal_mode = TRUNCATE;DELETE FROM \"${BACKUP_DB_PREFIX}filter_queue\" WHERE \"entry_id\"=${entry_id:?}" >/dev/null
+		sqlite3 "${SNAPSHOTCTL_DB_PATH:?}" "PRAGMA journal_mode = TRUNCATE;DELETE FROM \"${SNAPSHOTCTL_DB_PREFIX}filter_queue\" WHERE \"entry_id\"=${entry_id:?}" >/dev/null
 		return
 	fi
 	local lock_code;	lock_code=$(cat <(echo "COMPRESS:${entry_id:?}:") <(head --bytes=8 -q /dev/urandom) | sha256sum -b - | awk '{ print $1 }') || return
@@ -451,21 +451,21 @@ process_filter_queue_item() {
 	local checksum;	checksum=$(do_lock "${lock_code:?}" sha256sum -b "${worktmp:?}/${new_fname:?}" | awk '{ print $1 }') || { local rcode=$?; rel_lock "${lock_code:?}"; return $rcode; }
 	do_lock "${lock_code:?}" mv --no-clobber --target-directory="${backup_destination:?}/" "${worktmp:?}/${new_fname:?}" || { local rcode=$?; rel_lock "${lock_code:?}"; return $rcode; }
 	# shellcheck disable=SC2016
-	local -r BACKUP_JQ_DBSTATEMENT_PROCESS_FILTER='( [
+	local -r SNAPSHOTCTL_JQ_DBSTATEMENT_PROCESS_FILTER='( [
 		"PRAGMA journal_mode = TRUNCATE",
 		"BEGIN TRANSACTION",
 		"UPDATE \"\($db_prefix)entries\" SET \"fname\" = '\''\($new_fname)'\'', \"size\" = \($size), \"sha256\" = '\''\($sha256)'\'', \"type\" = '\''\($new_type)'\'' WHERE \"id\" = \($entry_id)",
 		"DELETE FROM \"\($db_prefix)filter_queue\" WHERE \"entry_id\" = \($entry_id)",
 		"COMMIT TRANSACTION"
 	] )|join(";")'
-	local sql_statement;	sql_statement=$(jq -n -r --arg db_prefix "${BACKUP_DB_PREFIX}" --argjson entry_id "${entry_id:?}" --arg new_fname "${new_fname:?}" --argjson size "${size:?}" --arg sha256 "${checksum:?}" --arg new_type "${convert_type:?}" "${BACKUP_JQ_DBSTATEMENT_PROCESS_FILTER:?}") || { local rcode=$?; rm -f "${backup_destination:?}/${new_fname:?}"; rel_lock "${lock_code:?}"; return $rcode; }
-	sqlite3 "${BACKUP_DB_PATH:?}" "${sql_statement:?}" >/dev/null || { local rcode=$?; rm -f "${backup_destination:?}/${new_fname:?}"; rel_lock "${lock_code:?}"; return $rcode; }
+	local sql_statement;	sql_statement=$(jq -n -r --arg db_prefix "${SNAPSHOTCTL_DB_PREFIX}" --argjson entry_id "${entry_id:?}" --arg new_fname "${new_fname:?}" --argjson size "${size:?}" --arg sha256 "${checksum:?}" --arg new_type "${convert_type:?}" "${SNAPSHOTCTL_JQ_DBSTATEMENT_PROCESS_FILTER:?}") || { local rcode=$?; rm -f "${backup_destination:?}/${new_fname:?}"; rel_lock "${lock_code:?}"; return $rcode; }
+	sqlite3 "${SNAPSHOTCTL_DB_PATH:?}" "${sql_statement:?}" >/dev/null || { local rcode=$?; rm -f "${backup_destination:?}/${new_fname:?}"; rel_lock "${lock_code:?}"; return $rcode; }
 	rm -f "${backup_destination:?}/${fname:?}"
 	rel_lock "${lock_code:?}"
 }
 
 process_filter_queue() {
-	local filter_queue;	filter_queue=$(sqlite3 -json -readonly "${BACKUP_DB_PATH:?}" "SELECT DISTINCT \"entry_id\" FROM \"${BACKUP_DB_PREFIX}filter_queue\"" | jq -c 'map(.entry_id)') || return
+	local filter_queue;	filter_queue=$(sqlite3 -json -readonly "${SNAPSHOTCTL_DB_PATH:?}" "SELECT DISTINCT \"entry_id\" FROM \"${SNAPSHOTCTL_DB_PREFIX}filter_queue\"" | jq -c 'map(.entry_id)') || return
 	[ -n "$filter_queue" ] || filter_queue='[]'
 	for item in $(jq -n -r --argjson filter_queue "$filter_queue" '$filter_queue|.[]'); do
 		process_filter_queue_item "$item" || return
