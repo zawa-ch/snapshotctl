@@ -25,6 +25,7 @@ __LICENSE__
 
 # SNAPSHOTCTL_BIN_LOCATION="$(cd "$(dirname "$0")" && pwd)" || exit
 # readonly SNAPSHOTCTL_BIN_LOCATION
+readonly SNAPSHOTCTL_VERSION='alpha-1.0'
 readonly SNAPSHOTCTL_DB_PREFIX='snapshotctl-'
 readonly SNAPSHOTCTL_DB_SCHEMA_REVISION=1
 
@@ -497,6 +498,12 @@ command_help() {
 	__EOF
 }
 
+command_version() {
+	cat <<-__EOF
+	snapshotctl ${SNAPSHOTCTL_VERSION}
+	__EOF
+}
+
 command_initialize() {
 	help() {
 		cat <<-__EOF
@@ -622,7 +629,9 @@ while (( $# > 0 )); do case $1 in
 	clean)		shift;	command_clean "$@";	exit;;
 	check)		shift;	command_check "$@";	exit;;
 	help)		shift;	command_help;	break;;
+	version)	shift;	command_version;	break;;
 	--help)		shift;	command_help;	break;;
+	--version)	shift;	command_version;	break;;
 	--*)		echo "Invalid option: $1" >&2;	echo "Type \"$0 help\" for more help." >&2;	exit 1;;
 	-*)
 		if [[ $1 =~ h ]]; then opt_help='true'; fi
