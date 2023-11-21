@@ -648,6 +648,49 @@ command_list() {
 	fi
 }
 
+command_info() {
+	help() {
+		cat <<-__EOF
+		$0 info
+		Show details snapshot entry
+
+		usage:
+		  $0 info [<options>] <id>
+		  $0 info --help
+
+		options
+		  --json
+		    Output as JSON text.
+		  --help | -h
+		    Show this help and exit.
+		__EOF
+	}
+	local opt_args=()
+	local opt_help=
+	local opt_json=
+	while (( $# > 0 )); do case $1 in
+		--json)		opt_json='true';	shift;;
+		--help)		help;	return;;
+		--*)		echo "Invalid option: $1" >&2;	echo "Type \"$0 initialize --help\" for more help." >&2;	return 1;;
+		-*)
+			if [[ $1 =~ h ]]; then opt_help='true'; fi
+			if [ -n "$opt_help" ]; then help; break; fi
+			shift;;
+		*)			opt_args+=("$1");	shift;;
+	esac done
+
+	check | jq '.error|if type != "null" then ("snapshotctl: Error reported when database checking\n\(.code): \(.message)"|halt_error(1)) else empty end' >/dev/null || return
+
+	[ ${#opt_args[@]} -ge 1 ] || { echo "snapshotctl: ID not specified"; return 2; }
+	[ "$(sqlite3 -readonly "${SNAPSHOTCTL_DB_PATH:?}" "SELECT COUNT(*) FROM \"${SNAPSHOTCTL_DB_PREFIX}entries\" WHERE \"id\" = ${opt_args[0]}")" -eq 1 ] || { echo "snapshotctl: entry ${opt_args[0]} not found"; return 1; }
+
+	if [ -n "$opt_json" ]; then
+		sqlite3 -json -readonly "${SNAPSHOTCTL_DB_PATH:?}" "SELECT * FROM \"${SNAPSHOTCTL_DB_PREFIX}entries\" WHERE \"id\" = ${opt_args[0]}" | jq -c '.'
+	else
+		sqlite3 -json -readonly "${SNAPSHOTCTL_DB_PATH:?}" "SELECT * FROM \"${SNAPSHOTCTL_DB_PREFIX}entries\" WHERE \"id\" = ${opt_args[0]}" | jq -r '.[0]|["id: \(.id)", "date: \(.date|localtime|strftime("%Y-%m-%d %H:%M:%S"))\(.date - (.date|trunc) | tostring | ltrimstr("0"))", "filename: \(.fname)", "type: \(.type)", "size: \(.size)", "sha256: \(.sha256)"]|.[]'
+	fi
+}
+
 command_clean() {
 	echo "Not implemented yet" >&2
 	return 255
@@ -668,6 +711,7 @@ while (( $# > 0 )); do case $1 in
 	create)		shift;	command_create "$@";	exit;;
 	update)		shift;	command_update "$@";	exit;;
 	list)		shift;	command_list "$@";	exit;;
+	info)		shift;	command_info "$@";	exit;;
 	clean)		shift;	command_clean "$@";	exit;;
 	check)		shift;	command_check "$@";	exit;;
 	help)		shift;	command_help;	break;;
