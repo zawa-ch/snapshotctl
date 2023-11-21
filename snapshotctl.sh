@@ -492,6 +492,8 @@ command_help() {
 	    Create snapshot.
 	  entry
 	    Manage snapshot entry.
+	  rule
+	    Manage snapshot rules.
 	  help
 	    Show this help.
 
@@ -752,6 +754,144 @@ command_entry() {
 	esac
 }
 
+command_rule() {
+	help() {
+		cat <<-__EOF
+		$0 rule
+		Manage snapshot rules
+
+		usage:
+		  $0 rule <operation>
+		  $0 rule --help
+
+		operations
+		  list
+		    List rules
+		  info
+		    Show rule details
+		  help
+		    Show this help
+
+		options
+		  --help | -h
+		    Show this help and exit.
+		__EOF
+	}
+
+	list() {
+		help() {
+			cat <<-__EOF
+			$0 list
+			  List rules
+
+			usage:
+			  $0 entry list [<options>]
+
+			options
+			  --compact | -c
+			    Output compact list.
+			  --json | -j
+			    Output as JSON list.
+			  --full-json
+			    Output as complete JSON text.
+			  --help | -h
+			    Show this help and exit.
+			__EOF
+		}
+
+		local opt_help=
+		local opt_compact=
+		local opt_json=
+		local opt_full_json=
+		while (( $# > 0 )); do case $1 in
+			--compact)		opt_compact='true';	shift;;
+			--full-json)	opt_full_json='true';	shift;;
+			--json)			opt_json='true';	shift;;
+			--help)			help;	return;;
+			--*)			echo "Invalid option: $1" >&2;	echo "Type \"$0 rule list --help\" for more help." >&2;	return 2;;
+			-*)
+				if [[ $1 =~ c ]]; then opt_compact='true'; fi
+				if [[ $1 =~ j ]]; then opt_json='true'; fi
+				if [[ $1 =~ h ]]; then opt_help='true'; fi
+				if [ -n "$opt_help" ]; then help; break; fi
+				shift;;
+			*)				echo "Warning: Extra argument $1" >&2;	shift;;
+		esac done
+
+		check | jq '.error|if type != "null" then ("snapshotctl: Error reported when database checking\n\(.code): \(.message)"|halt_error(1)) else empty end' >/dev/null || return
+		local count
+		count=$(sqlite3 -readonly "${SNAPSHOTCTL_DB_PATH:?}" "SELECT COUNT(*) FROM \"${SNAPSHOTCTL_DB_PREFIX}keeprules\"") || return
+		{ [ -n "$opt_full_json" ] || [ -n "$opt_json" ]; } && [ "$count" -le 0 ] && { echo '[]' | jq -c '.'; return 0; }
+		if [ -n "$opt_full_json" ]; then
+			sqlite3 -json -readonly "${SNAPSHOTCTL_DB_PATH:?}" "SELECT * FROM \"${SNAPSHOTCTL_DB_PREFIX}keeprules\"" | jq -c '.'
+		elif [ -n "$opt_json" ]; then
+			sqlite3 -json -readonly "${SNAPSHOTCTL_DB_PATH:?}" "SELECT \"name\" FROM \"${SNAPSHOTCTL_DB_PREFIX}keeprules\"" | jq -c 'map(.name)'
+		elif [ -n "$opt_compact" ]; then
+			sqlite3 -json -readonly "${SNAPSHOTCTL_DB_PATH:?}" "SELECT \"name\" FROM \"${SNAPSHOTCTL_DB_PREFIX}keeprules\"" | jq -r 'map("\(.name)")|join(" ")'
+		else
+			echo "$count item(s)"
+			sqlite3 -json -readonly "${SNAPSHOTCTL_DB_PATH:?}" "SELECT \"name\" FROM \"${SNAPSHOTCTL_DB_PREFIX}keeprules\"" | jq -r 'map("\(.name)")|.[]'
+		fi
+	}
+
+	info() {
+		help() {
+			cat <<-__EOF
+			$0 entry info
+			  Show rule details
+
+			usage:
+			  $0 entry info [<options>] <id>
+			  $0 entry info --help
+
+			options
+			  --json | -j
+			    Output as JSON text.
+			  --help | -h
+			    Show this help and exit.
+			__EOF
+		}
+		local opt_args=()
+		local opt_help=
+		local opt_json=
+		while (( $# > 0 )); do case $1 in
+			--json)		opt_json='true';	shift;;
+			--help)		help;	return;;
+			--*)		echo "Invalid option: $1" >&2;	echo "Type \"$0 entry info --help\" for more help." >&2;	return 2;;
+			-*)
+				if [[ $1 =~ j ]]; then opt_json='true'; fi
+				if [[ $1 =~ h ]]; then opt_help='true'; fi
+				if [ -n "$opt_help" ]; then help; break; fi
+				shift;;
+			*)			opt_args+=("$1");	shift;;
+		esac done
+
+		check | jq '.error|if type != "null" then ("snapshotctl: Error reported when database checking\n\(.code): \(.message)"|halt_error(1)) else empty end' >/dev/null || return
+
+		[ ${#opt_args[@]} -ge 1 ] || { echo "snapshotctl: Rule name not specified"; return 2; }
+		[ "$(sqlite3 -readonly "${SNAPSHOTCTL_DB_PATH:?}" "SELECT COUNT(*) FROM \"${SNAPSHOTCTL_DB_PREFIX}keeprules\" WHERE \"name\" = '${opt_args[0]}'")" -eq 1 ] || { echo "snapshotctl: entry ${opt_args[0]} not found"; return 1; }
+
+		if [ -n "$opt_json" ]; then
+			sqlite3 -json -readonly "${SNAPSHOTCTL_DB_PATH:?}" "SELECT * FROM \"${SNAPSHOTCTL_DB_PREFIX}keeprules\" WHERE \"name\" = '${opt_args[0]}'" | jq -c '.[0]'
+		else
+			sqlite3 -json -readonly "${SNAPSHOTCTL_DB_PATH:?}" "SELECT * FROM \"${SNAPSHOTCTL_DB_PREFIX}keeprules\" WHERE \"name\" = '${opt_args[0]}'" | jq -r '.[0]|(["name: \(.name)"] + if (.store_type|type)=="string" then ["store type: \(.store_type)"] else null end + if (.bind_duration|type)=="number" then ["bind interval: \(.bind_duration)sec."] else null end + if (.keep_entries|type)=="number" then ["keep entry count: \(.keep_entries)"] else null end + if (.keep_duration|type)=="number" then ["keep for: \(.keep_duration)sec."] else null end)|.[]'
+		fi
+	}
+
+	[ -n "$1" ] || { echo "snapshotctl: operation not specified" >&2;	echo "Type \"$0 rule help\" for more help." >&2;	return 2; }
+	case $1 in
+		list)	shift;	list "$@";	return;;
+		info)	shift;	info "$@";	return;;
+		help)	shift;	help;	return;;
+		--*)	echo "Invalid option: $1" >&2;	echo "Type \"$0 rule help\" for more help." >&2;	return 2;;
+		-*)
+			if [[ $1 =~ h ]]; then help;	return; fi
+			echo "Invalid option: $1" >&2;	echo "Type \"$0 rule help\" for more help." >&2;	return 2;
+			;;
+		*)		echo "Invalid argument: $1" >&2;	echo "Type \"$0 rule help\" for more help." >&2;	return 2;;
+	esac
+}
+
 command_clean() {
 	echo "Not implemented yet" >&2
 	return 255
@@ -772,6 +912,7 @@ while (( $# > 0 )); do case $1 in
 	create)		shift;	command_create "$@";	exit;;
 	update)		shift;	command_update "$@";	exit;;
 	entry)		shift;	command_entry "$@";	exit;;
+	rule)		shift;	command_rule "$@";	exit;;
 	clean)		shift;	command_clean "$@";	exit;;
 	check)		shift;	command_check "$@";	exit;;
 	help)		shift;	command_help;	break;;
