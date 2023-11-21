@@ -303,6 +303,7 @@ process_add_queue_item() {
 	local latest_entry;	latest_entry=$(do_lock "${lock_code:?}" sqlite3 -json -readonly "${SNAPSHOTCTL_DB_PATH:?}" "SELECT * FROM \"${SNAPSHOTCTL_DB_PREFIX}keep-entry-latests\"" | jq -c 'map({ key: .rule, value: del(.rule) })|from_entries') || { local rcode=$?; rel_lock "${lock_code:?}"; return $rcode; }
 	[ -n "${latest_entry}" ] || latest_entry='{}'
 	local rules;	rules=$(do_lock "${lock_code:?}" sqlite3 -json -readonly "${SNAPSHOTCTL_DB_PATH:?}" "SELECT * FROM \"${SNAPSHOTCTL_DB_PREFIX}keeprules\"" | jq -c --argjson latest "${latest_entry:?}" 'map(.name as $rule_name|. + { latest: ($latest|.[$rule_name]) })') || { local rcode=$?; rel_lock "${lock_code:?}"; return $rcode; }
+	[ -n "${rules}" ] || rules='[]'
 	# shellcheck disable=SC2016
 	local -r SNAPSHOTCTL_JQ_DBSTATEMENT_PROCESS_ADD_ITEM='( [
 		"PRAGMA journal_mode = TRUNCATE",
