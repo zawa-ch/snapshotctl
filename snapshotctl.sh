@@ -734,6 +734,7 @@ command_entry() {
 		fi
 	}
 
+	[ -n "$1" ] || { echo "snapshotctl: operation not specified" >&2;	echo "Type \"$0 entry help\" for more help." >&2;	return 2; }
 	case $1 in
 		list)	shift;	list "$@";	return;;
 		info)	shift;	info "$@";	return;;
