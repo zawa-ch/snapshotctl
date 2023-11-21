@@ -699,7 +699,7 @@ command_entry() {
 			  $0 entry info --help
 
 			options
-			  --json
+			  --json | -j
 			    Output as JSON text.
 			  --help | -h
 			    Show this help and exit.
@@ -713,6 +713,7 @@ command_entry() {
 			--help)		help;	return;;
 			--*)		echo "Invalid option: $1" >&2;	echo "Type \"$0 entry info --help\" for more help." >&2;	return 2;;
 			-*)
+				if [[ $1 =~ j ]]; then opt_json='true'; fi
 				if [[ $1 =~ h ]]; then opt_help='true'; fi
 				if [ -n "$opt_help" ]; then help; break; fi
 				shift;;
