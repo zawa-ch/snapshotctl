@@ -689,6 +689,7 @@ command_info() {
 	check | jq '.error|if type != "null" then ("snapshotctl: Error reported when database checking\n\(.code): \(.message)"|halt_error(1)) else empty end' >/dev/null || return
 
 	[ ${#opt_args[@]} -ge 1 ] || { echo "snapshotctl: ID not specified"; return 2; }
+	[ "${opt_args[0]}" -eq 0 ] 2>/dev/null || [ "${opt_args[0]}" -ne 0 ] 2>/dev/null || { echo "snapshotctl: ID expects integer"; return 2; }
 	[ "$(sqlite3 -readonly "${SNAPSHOTCTL_DB_PATH:?}" "SELECT COUNT(*) FROM \"${SNAPSHOTCTL_DB_PREFIX}entries\" WHERE \"id\" = ${opt_args[0]}")" -eq 1 ] || { echo "snapshotctl: entry ${opt_args[0]} not found"; return 1; }
 
 	if [ -n "$opt_json" ]; then
