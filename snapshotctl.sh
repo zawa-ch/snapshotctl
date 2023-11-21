@@ -586,7 +586,7 @@ command_update() {
 
 		usage:
 		  $0 update
-		  $0 create --help
+		  $0 update --help
 
 		options
 		  --help | -h
