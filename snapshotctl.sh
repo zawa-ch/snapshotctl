@@ -617,8 +617,11 @@ command_clean() {
 }
 
 command_check() {
-	echo "Not implemented yet" >&2
-	return 255
+	jq --version >/dev/null || { echo '{"error":{"code":"COMMAND_NOT_USABLE","message":"jq command returns failure."}}'; return 1; }
+	sqlite3 -version >/dev/null || { jq -n -c '{ error: { code: "COMMAND_NOT_USABLE", message: "sqlite3 command returns failure." } }'; return 1; }
+	sha256sum --version >/dev/null || { jq -n -c '{ error: { code: "COMMAND_NOT_USABLE", message: "sha256sum command returns failure." } }'; return 1; }
+	awk --version >/dev/null || { jq -n -c '{ error: { code: "COMMAND_NOT_USABLE", message: "awk command returns failure." } }'; return 1; }
+	check || return
 }
 
 [ $# -gt 0 ] || { echo "No commands given." >&2; echo "Type \"$0 help\" for more help." >&2; exit 1; }
