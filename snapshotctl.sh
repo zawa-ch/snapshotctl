@@ -563,7 +563,7 @@ command_create() {
 	while (( $# > 0 )); do case $1 in
 		--help)		help;	return;;
 		--create-only)	shift;	opt_create_only='true';;
-		--*)		echo "Invalid option: $1" >&2;	echo "Type \"$0 initialize --help\" for more help." >&2;	return 2;;
+		--*)		echo "Invalid option: $1" >&2;	echo "Type \"$0 create --help\" for more help." >&2;	return 2;;
 		-*)
 			if [[ $1 =~ h ]]; then opt_help='true'; fi
 			if [ -n "$opt_help" ]; then help; break; fi
@@ -596,7 +596,7 @@ command_update() {
 	local opt_help=
 	while (( $# > 0 )); do case $1 in
 		--help)		help;	return;;
-		--*)		echo "Invalid option: $1" >&2;	echo "Type \"$0 initialize --help\" for more help." >&2;	return 2;;
+		--*)		echo "Invalid option: $1" >&2;	echo "Type \"$0 update --help\" for more help." >&2;	return 2;;
 		-*)
 			if [[ $1 =~ h ]]; then opt_help='true'; fi
 			if [ -n "$opt_help" ]; then help; break; fi
