@@ -628,6 +628,7 @@ command_list() {
 		__EOF
 	}
 	local opt_help=
+	local opt_json=
 	while (( $# > 0 )); do case $1 in
 		--json)		opt_json='true';	shift;;
 		--help)		help;	return;;
