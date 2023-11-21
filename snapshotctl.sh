@@ -648,8 +648,10 @@ command_entry() {
 			options
 			--compact | -c
 				Output compact list.
-			--json
-				Output as JSON text.
+			--json | -j
+				Output as JSON list.
+			--full-json
+				Output as complete JSON text.
 			--help | -h
 				Show this help and exit.
 			__EOF
@@ -658,24 +660,29 @@ command_entry() {
 		local opt_help=
 		local opt_compact=
 		local opt_json=
+		local opt_full_json=
 		while (( $# > 0 )); do case $1 in
-			--compact)	opt_compact='true';	shift;;
-			--json)		opt_json='true';	shift;;
-			--help)		help;	return;;
-			--*)		echo "Invalid option: $1" >&2;	echo "Type \"$0 entry list --help\" for more help." >&2;	return 2;;
+			--compact)		opt_compact='true';	shift;;
+			--full-json)	opt_full_json='true';	shift;;
+			--json)			opt_json='true';	shift;;
+			--help)			help;	return;;
+			--*)			echo "Invalid option: $1" >&2;	echo "Type \"$0 entry list --help\" for more help." >&2;	return 2;;
 			-*)
 				if [[ $1 =~ c ]]; then opt_compact='true'; fi
+				if [[ $1 =~ j ]]; then opt_json='true'; fi
 				if [[ $1 =~ h ]]; then opt_help='true'; fi
 				if [ -n "$opt_help" ]; then help; break; fi
 				shift;;
-			*)			echo "Warning: Extra argument $1" >&2;	shift;;
+			*)				echo "Warning: Extra argument $1" >&2;	shift;;
 		esac done
 
 		check | jq '.error|if type != "null" then ("snapshotctl: Error reported when database checking\n\(.code): \(.message)"|halt_error(1)) else empty end' >/dev/null || return
-		if [ -n "$opt_compact" ]; then
-			sqlite3 -json -readonly "${SNAPSHOTCTL_DB_PATH:?}" "SELECT * FROM \"${SNAPSHOTCTL_DB_PREFIX}entries\"" | jq -r 'map("\(.id)")|join(" ")'
-		elif [ -n "$opt_json" ]; then
+		if [ -n "$opt_full_json" ]; then
 			sqlite3 -json -readonly "${SNAPSHOTCTL_DB_PATH:?}" "SELECT * FROM \"${SNAPSHOTCTL_DB_PREFIX}entries\"" | jq -c '.'
+		elif [ -n "$opt_json" ]; then
+			sqlite3 -json -readonly "${SNAPSHOTCTL_DB_PATH:?}" "SELECT \"id\" FROM \"${SNAPSHOTCTL_DB_PREFIX}entries\"" | jq -c 'map(.id)'
+		elif [ -n "$opt_compact" ]; then
+			sqlite3 -json -readonly "${SNAPSHOTCTL_DB_PATH:?}" "SELECT \"id\" FROM \"${SNAPSHOTCTL_DB_PREFIX}entries\"" | jq -r 'map("\(.id)")|join(" ")'
 		else
 			sqlite3 -json -readonly "${SNAPSHOTCTL_DB_PATH:?}" "SELECT * FROM \"${SNAPSHOTCTL_DB_PREFIX}entries\"" | jq -r 'map("\(.id): \(.date|localtime|strftime("%Y-%m-%d %H:%M:%S"))\(.date - (.date|trunc) | tostring | ltrimstr("0"))")|.[]'
 		fi
