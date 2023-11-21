@@ -236,7 +236,7 @@ create_snapshot() {
 		create_time=$(date +%s)
 	fi
 	local snapshot_filename;	snapshot_filename="snapshot_$(date --date="@${create_time:?}" +%Y%m%d_%H%M%S_%N).tar"
-	local lock_code;	lock_code=$(cat <(echo "CREATE:${snapshot_filename:?}:") <(head --bytes=8 -q /dev/urandom) | sha256sum -b - | awk '{ print $1 }') || return
+	local lock_code;	lock_code=$(cat <(echo "CREATE:${snapshot_filename:?}:") <(head -c 8 -q /dev/urandom) | sha256sum -b - | awk '{ print $1 }') || return
 	acq_lock "${lock_code:?}" || return
 	if [ -e "${worktmp:?}" ]; then
 		do_lock "${lock_code:?}" rm -rf "${worktmp:?}/*"
@@ -268,7 +268,7 @@ create_snapshot() {
 }
 
 update_keeplist() {
-	local lock_code;	lock_code=$(cat <(echo "UPDATE:") <(head --bytes=8 -q /dev/urandom) | sha256sum -b - | awk '{ print $1 }') || return
+	local lock_code;	lock_code=$(cat <(echo "UPDATE:") <(head -c 8 -q /dev/urandom) | sha256sum -b - | awk '{ print $1 }') || return
 	acq_lock "${lock_code:?}" || return
 	local rules;	rules=$(do_lock "${lock_code:?}" sqlite3 -json -readonly "${SNAPSHOTCTL_DB_PATH:?}" "SELECT * FROM \"${SNAPSHOTCTL_DB_PREFIX}keeprules\"") || return
 	[ -n "$rules" ] || rules='[]'
@@ -297,7 +297,7 @@ process_add_queue_item() {
 	local entry_id=$1
 	[ "$(sqlite3 -readonly "${SNAPSHOTCTL_DB_PATH:?}" "SELECT COUNT(*) FROM \"${SNAPSHOTCTL_DB_PREFIX}add_queue\" WHERE \"entry_id\"=${entry_id:?}")" -gt 0 ] || { echo "snapshotctl: Not exist entry ${entry_id} from add queue" >&2; return 1; }
 
-	local lock_code;	lock_code=$(cat <(echo "ADD:${entry_id:?}:") <(head --bytes=8 -q /dev/urandom) | sha256sum -b - | awk '{ print $1 }') || return
+	local lock_code;	lock_code=$(cat <(echo "ADD:${entry_id:?}:") <(head -c 8 -q /dev/urandom) | sha256sum -b - | awk '{ print $1 }') || return
 	acq_lock "${lock_code:?}" || return
 	local entry;	entry=$(do_lock "${lock_code:?}" sqlite3 -json -readonly "${SNAPSHOTCTL_DB_PATH:?}" "SELECT \"${SNAPSHOTCTL_DB_PREFIX}entries\".* FROM \"${SNAPSHOTCTL_DB_PREFIX}add_queue\" LEFT JOIN \"${SNAPSHOTCTL_DB_PREFIX}entries\" ON \"${SNAPSHOTCTL_DB_PREFIX}add_queue\".\"entry_id\"=\"${SNAPSHOTCTL_DB_PREFIX}entries\".\"id\"" | jq -c '.[0]') || { local rcode=$?; rel_lock "${lock_code:?}"; return $rcode; }
 	local latest_entry;	latest_entry=$(do_lock "${lock_code:?}" sqlite3 -json -readonly "${SNAPSHOTCTL_DB_PATH:?}" "SELECT * FROM \"${SNAPSHOTCTL_DB_PREFIX}keep-entry-latests\"" | jq -c 'map({ key: .rule, value: del(.rule) })|from_entries') || { local rcode=$?; rel_lock "${lock_code:?}"; return $rcode; }
@@ -334,7 +334,7 @@ process_remove_queue_item() {
 	local db_location;	db_location=$(cd "$(dirname "${SNAPSHOTCTL_DB_PATH:?}")" && pwd) || return
 	local backup_destination;	backup_destination=$(get_config | jq -r --arg db_location "${db_location:?}" '.backup_destination|if startswith("/") then . else ("\($db_location)/" + .) end') || return
 	local item_path;	item_path=$(sqlite3 -readonly "${SNAPSHOTCTL_DB_PATH:?}" "SELECT ('${backup_destination:?}/' || \"fname\") FROM \"${SNAPSHOTCTL_DB_PREFIX}entries\" WHERE \"id\"=${entry_id:?}") || return
-	local lock_code;	lock_code=$(cat <(echo "REMOVE:${entry_id:?}:") <(head --bytes=8 -q /dev/urandom) | sha256sum -b - | awk '{ print $1 }') || return
+	local lock_code;	lock_code=$(cat <(echo "REMOVE:${entry_id:?}:") <(head -c 8 -q /dev/urandom) | sha256sum -b - | awk '{ print $1 }') || return
 	acq_lock "${lock_code:?}" || return
 	if [ -e "${item_path:?}" ]; then
 		rm -f "${item_path:?}" || { local rcode=$?; rel_lock "${lock_code:?}"; return $rcode; }
@@ -427,7 +427,7 @@ process_filter_queue_item() {
 		sqlite3 "${SNAPSHOTCTL_DB_PATH:?}" "PRAGMA journal_mode = TRUNCATE;DELETE FROM \"${SNAPSHOTCTL_DB_PREFIX}filter_queue\" WHERE \"entry_id\"=${entry_id:?}" >/dev/null
 		return
 	fi
-	local lock_code;	lock_code=$(cat <(echo "COMPRESS:${entry_id:?}:") <(head --bytes=8 -q /dev/urandom) | sha256sum -b - | awk '{ print $1 }') || return
+	local lock_code;	lock_code=$(cat <(echo "COMPRESS:${entry_id:?}:") <(head -c 8 -q /dev/urandom) | sha256sum -b - | awk '{ print $1 }') || return
 	acq_lock "${lock_code:?}" || return
 	if [ -e "${worktmp:?}" ]; then
 		do_lock "${lock_code:?}" rm -rf "${worktmp:?}/*" || { local rcode=$?; rel_lock "${lock_code:?}"; return $rcode; }
