@@ -526,7 +526,7 @@ command_initialize() {
 	while (( $# > 0 )); do case $1 in
 		--help)		help;	return;;
 		--force)	opt_force='true';	shift;;
-		--*)		echo "Invalid option: $1" >&2;	echo "Type \"$0 initialize --help\" for more help." >&2;	return 1;;
+		--*)		echo "Invalid option: $1" >&2;	echo "Type \"$0 initialize --help\" for more help." >&2;	return 2;;
 		-*)
 			if [[ $1 =~ f ]]; then opt_force='true'; fi
 			if [[ $1 =~ h ]]; then opt_help='true'; fi
@@ -563,7 +563,7 @@ command_create() {
 	while (( $# > 0 )); do case $1 in
 		--help)		help;	return;;
 		--create-only)	shift;	opt_create_only='true';;
-		--*)		echo "Invalid option: $1" >&2;	echo "Type \"$0 initialize --help\" for more help." >&2;	return 1;;
+		--*)		echo "Invalid option: $1" >&2;	echo "Type \"$0 initialize --help\" for more help." >&2;	return 2;;
 		-*)
 			if [[ $1 =~ h ]]; then opt_help='true'; fi
 			if [ -n "$opt_help" ]; then help; break; fi
@@ -596,7 +596,7 @@ command_update() {
 	local opt_help=
 	while (( $# > 0 )); do case $1 in
 		--help)		help;	return;;
-		--*)		echo "Invalid option: $1" >&2;	echo "Type \"$0 initialize --help\" for more help." >&2;	return 1;;
+		--*)		echo "Invalid option: $1" >&2;	echo "Type \"$0 initialize --help\" for more help." >&2;	return 2;;
 		-*)
 			if [[ $1 =~ h ]]; then opt_help='true'; fi
 			if [ -n "$opt_help" ]; then help; break; fi
@@ -636,7 +636,7 @@ command_list() {
 		--compact)	opt_compact='true';	shift;;
 		--json)		opt_json='true';	shift;;
 		--help)		help;	return;;
-		--*)		echo "Invalid option: $1" >&2;	echo "Type \"$0 initialize --help\" for more help." >&2;	return 1;;
+		--*)		echo "Invalid option: $1" >&2;	echo "Type \"$0 initialize --help\" for more help." >&2;	return 2;;
 		-*)
 			if [[ $1 =~ c ]]; then opt_compact='true'; fi
 			if [[ $1 =~ h ]]; then opt_help='true'; fi
@@ -678,7 +678,7 @@ command_info() {
 	while (( $# > 0 )); do case $1 in
 		--json)		opt_json='true';	shift;;
 		--help)		help;	return;;
-		--*)		echo "Invalid option: $1" >&2;	echo "Type \"$0 initialize --help\" for more help." >&2;	return 1;;
+		--*)		echo "Invalid option: $1" >&2;	echo "Type \"$0 initialize --help\" for more help." >&2;	return 2;;
 		-*)
 			if [[ $1 =~ h ]]; then opt_help='true'; fi
 			if [ -n "$opt_help" ]; then help; break; fi
@@ -726,10 +726,10 @@ while (( $# > 0 )); do case $1 in
 	version)	shift;	command_version;	break;;
 	--help)		shift;	command_help;	break;;
 	--version)	shift;	command_version;	break;;
-	--*)		echo "Invalid option: $1" >&2;	echo "Type \"$0 help\" for more help." >&2;	exit 1;;
+	--*)		echo "Invalid option: $1" >&2;	echo "Type \"$0 help\" for more help." >&2;	exit 2;;
 	-*)
 		if [[ $1 =~ h ]]; then opt_help='true'; fi
 		if [ -n "$opt_help" ]; then command_help; break; fi
 		shift;;
-	*)			echo "Invalid argument: $1" >&2;	echo "Type \"$0 help\" for more help." >&2;	exit 1;;
+	*)			echo "Invalid argument: $1" >&2;	echo "Type \"$0 help\" for more help." >&2;	exit 2;;
 esac done
