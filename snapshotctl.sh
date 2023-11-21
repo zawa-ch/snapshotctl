@@ -640,20 +640,20 @@ command_entry() {
 		help() {
 			cat <<-__EOF
 			$0 list
-			List snapshot entry
+			  List snapshot entry
 
 			usage:
-			$0 entry list [<options>]
+			  $0 entry list [<options>]
 
 			options
-			--compact | -c
-				Output compact list.
-			--json | -j
-				Output as JSON list.
-			--full-json
-				Output as complete JSON text.
-			--help | -h
-				Show this help and exit.
+			  --compact | -c
+			    Output compact list.
+			  --json | -j
+			    Output as JSON list.
+			  --full-json
+			    Output as complete JSON text.
+			  --help | -h
+			    Show this help and exit.
 			__EOF
 		}
 
@@ -692,17 +692,17 @@ command_entry() {
 		help() {
 			cat <<-__EOF
 			$0 entry info
-			Show details snapshot entry
+			  Show details snapshot entry
 
 			usage:
-			$0 entry info [<options>] <id>
-			$0 entry info --help
+			  $0 entry info [<options>] <id>
+			  $0 entry info --help
 
 			options
-			--json
-				Output as JSON text.
-			--help | -h
-				Show this help and exit.
+			  --json
+			    Output as JSON text.
+			  --help | -h
+			    Show this help and exit.
 			__EOF
 		}
 		local opt_args=()
