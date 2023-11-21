@@ -726,7 +726,7 @@ command_entry() {
 		[ "$(sqlite3 -readonly "${SNAPSHOTCTL_DB_PATH:?}" "SELECT COUNT(*) FROM \"${SNAPSHOTCTL_DB_PREFIX}entries\" WHERE \"id\" = ${opt_args[0]}")" -eq 1 ] || { echo "snapshotctl: entry ${opt_args[0]} not found"; return 1; }
 
 		if [ -n "$opt_json" ]; then
-			sqlite3 -json -readonly "${SNAPSHOTCTL_DB_PATH:?}" "SELECT * FROM \"${SNAPSHOTCTL_DB_PREFIX}entries\" WHERE \"id\" = ${opt_args[0]}" | jq -c '.'
+			sqlite3 -json -readonly "${SNAPSHOTCTL_DB_PATH:?}" "SELECT * FROM \"${SNAPSHOTCTL_DB_PREFIX}entries\" WHERE \"id\" = ${opt_args[0]}" | jq -c '.[0]'
 		else
 			sqlite3 -json -readonly "${SNAPSHOTCTL_DB_PATH:?}" "SELECT * FROM \"${SNAPSHOTCTL_DB_PREFIX}entries\" WHERE \"id\" = ${opt_args[0]}" | jq -r '.[0]|["id: \(.id)", "date: \(.date|localtime|strftime("%Y-%m-%d %H:%M:%S"))\(.date - (.date|trunc) | tostring | ltrimstr("0"))", "filename: \(.fname)", "type: \(.type)", "size: \(.size)", "sha256: \(.sha256)"]|.[]'
 		fi
