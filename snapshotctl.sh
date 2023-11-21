@@ -737,6 +737,7 @@ command_entry() {
 	case $1 in
 		list)	shift;	list "$@";	return;;
 		info)	shift;	info "$@";	return;;
+		help)	shift;	help;	return;;
 		--*)	echo "Invalid option: $1" >&2;	echo "Type \"$0 entry help\" for more help." >&2;	return 2;;
 		-*)
 			if [[ $1 =~ h ]]; then help;	return; fi
