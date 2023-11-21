@@ -490,6 +490,8 @@ command_help() {
 	    Check system or database.
 	  create
 	    Create snapshot.
+	  entry
+	    Manage snapshot entry.
 	  help
 	    Show this help.
 
@@ -615,7 +617,7 @@ command_entry() {
 	help() {
 		cat <<-__EOF
 		$0 entry
-		Snapshot entry management
+		Manage snapshot entry
 
 		usage:
 		  $0 entry <operation>
@@ -634,7 +636,6 @@ command_entry() {
 		    Show this help and exit.
 		__EOF
 	}
-
 
 	list() {
 		help() {
