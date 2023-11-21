@@ -621,6 +621,8 @@ command_list() {
 		  $0 list [<options>]
 
 		options
+		  --compact | -c
+		    Output compact list.
 		  --json
 		    Output as JSON text.
 		  --help | -h
@@ -628,12 +630,15 @@ command_list() {
 		__EOF
 	}
 	local opt_help=
+	local opt_compact=
 	local opt_json=
 	while (( $# > 0 )); do case $1 in
+		--compact)	opt_compact='true';	shift;;
 		--json)		opt_json='true';	shift;;
 		--help)		help;	return;;
 		--*)		echo "Invalid option: $1" >&2;	echo "Type \"$0 initialize --help\" for more help." >&2;	return 1;;
 		-*)
+			if [[ $1 =~ c ]]; then opt_compact='true'; fi
 			if [[ $1 =~ h ]]; then opt_help='true'; fi
 			if [ -n "$opt_help" ]; then help; break; fi
 			shift;;
@@ -641,7 +646,9 @@ command_list() {
 	esac done
 
 	check | jq '.error|if type != "null" then ("snapshotctl: Error reported when database checking\n\(.code): \(.message)"|halt_error(1)) else empty end' >/dev/null || return
-	if [ -n "$opt_json" ]; then
+	if [ -n "$opt_compact" ]; then
+		sqlite3 -json -readonly "${SNAPSHOTCTL_DB_PATH:?}" "SELECT * FROM \"${SNAPSHOTCTL_DB_PREFIX}entries\"" | jq -r 'map("\(.id)")|join(" ")'
+	elif [ -n "$opt_json" ]; then
 		sqlite3 -json -readonly "${SNAPSHOTCTL_DB_PATH:?}" "SELECT * FROM \"${SNAPSHOTCTL_DB_PREFIX}entries\"" | jq -c '.'
 	else
 		sqlite3 -json -readonly "${SNAPSHOTCTL_DB_PATH:?}" "SELECT * FROM \"${SNAPSHOTCTL_DB_PREFIX}entries\"" | jq -r 'map("\(.id): \(.date|localtime|strftime("%Y-%m-%d %H:%M:%S"))\(.date - (.date|trunc) | tostring | ltrimstr("0"))")|.[]'
