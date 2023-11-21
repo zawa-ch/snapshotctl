@@ -678,6 +678,9 @@ command_entry() {
 		esac done
 
 		check | jq '.error|if type != "null" then ("snapshotctl: Error reported when database checking\n\(.code): \(.message)"|halt_error(1)) else empty end' >/dev/null || return
+		local count
+		count=$(sqlite3 -readonly "${SNAPSHOTCTL_DB_PATH:?}" "SELECT COUNT(*) FROM \"${SNAPSHOTCTL_DB_PREFIX}entries\"") || return
+		{ [ -n "$opt_full_json" ] || [ -n "$opt_json" ]; } && [ "$count" -le 0 ] && { echo '[]' | jq -c '.'; return 0; }
 		if [ -n "$opt_full_json" ]; then
 			sqlite3 -json -readonly "${SNAPSHOTCTL_DB_PATH:?}" "SELECT * FROM \"${SNAPSHOTCTL_DB_PREFIX}entries\"" | jq -c '.'
 		elif [ -n "$opt_json" ]; then
@@ -685,6 +688,7 @@ command_entry() {
 		elif [ -n "$opt_compact" ]; then
 			sqlite3 -json -readonly "${SNAPSHOTCTL_DB_PATH:?}" "SELECT \"id\" FROM \"${SNAPSHOTCTL_DB_PREFIX}entries\"" | jq -r 'map("\(.id)")|join(" ")'
 		else
+			echo "$count item(s)"
 			sqlite3 -json -readonly "${SNAPSHOTCTL_DB_PATH:?}" "SELECT * FROM \"${SNAPSHOTCTL_DB_PREFIX}entries\"" | jq -r 'map("\(.id): \(.date|localtime|strftime("%Y-%m-%d %H:%M:%S"))\(.date - (.date|trunc) | tostring | ltrimstr("0"))")|.[]'
 		fi
 	}
