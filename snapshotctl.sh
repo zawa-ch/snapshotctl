@@ -781,11 +781,11 @@ command_rule() {
 	list() {
 		help() {
 			cat <<-__EOF
-			$0 list
+			$0 rule list
 			  List rules
 
 			usage:
-			  $0 entry list [<options>]
+			  $0 rule list [<options>]
 
 			options
 			  --compact | -c
@@ -837,12 +837,12 @@ command_rule() {
 	info() {
 		help() {
 			cat <<-__EOF
-			$0 entry info
+			$0 rule info
 			  Show rule details
 
 			usage:
-			  $0 entry info [<options>] <id>
-			  $0 entry info --help
+			  $0 rule info [<options>] <name>
+			  $0 rule info --help
 
 			options
 			  --json | -j
