@@ -857,7 +857,7 @@ command_rule() {
 		while (( $# > 0 )); do case $1 in
 			--json)		opt_json='true';	shift;;
 			--help)		help;	return;;
-			--*)		echo "Invalid option: $1" >&2;	echo "Type \"$0 entry info --help\" for more help." >&2;	return 2;;
+			--*)		echo "Invalid option: $1" >&2;	echo "Type \"$0 rule info --help\" for more help." >&2;	return 2;;
 			-*)
 				if [[ $1 =~ j ]]; then opt_json='true'; fi
 				if [[ $1 =~ h ]]; then opt_help='true'; fi
