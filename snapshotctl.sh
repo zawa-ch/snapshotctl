@@ -237,22 +237,30 @@ create_snapshot() {
 	fi
 	local snapshot_filename;	snapshot_filename="snapshot_$(date --date="@${create_time:?}" +%Y%m%d_%H%M%S_%N).tar"
 	local lock_code;	lock_code=$(cat <(echo "CREATE:${snapshot_filename:?}:") <(head -c 8 -q /dev/urandom) | sha256sum -b - | awk '{ print $1 }') || return
+	echo "Locking db"
 	acq_lock "${lock_code:?}" || return
+	echo "Cleaning workdir"
 	if [ -e "${worktmp:?}" ]; then
 		do_lock "${lock_code:?}" rm -rf "${worktmp:?}/*"
 	else
 		do_lock "${lock_code:?}" mkdir -p "${worktmp:?}"
 	fi
 	if [ -n "${pre_snapshot_script}" ] && [ -x "${pre_snapshot_script:?}" ]; then
+		echo "Run pre-snapshot script"
 		(do_lock "${lock_code:?}" "${pre_snapshot_script:?}") || { local rcode=$?; rel_lock "${lock_code:?}"; return $rcode; }
 	fi
+	echo "Creating..."
 	(cd "${backup_source:?}" && do_lock "${lock_code:?}" tar -cf "${worktmp:?}/${snapshot_filename:?}" ./*) || { local rcode=$?; rel_lock "${lock_code:?}"; return $rcode; }
 	if [ -n "${post_snapshot_script}" ] && [ -x "${post_snapshot_script:?}" ]; then
+		echo "Run post-snapshot script"
 		(do_lock "${lock_code:?}" "${post_snapshot_script:?}") || { local rcode=$?; rel_lock "${lock_code:?}"; return $rcode; }
 	fi
 	local size;	size=$(do_lock "${lock_code:?}" wc -c "${worktmp:?}/${snapshot_filename:?}" | awk '{ print $1 }') || { local rcode=$?; rel_lock "${lock_code:?}"; return $rcode; }
+	echo "Calculating sha256: $size bytes"
 	local checksum;	checksum=$(do_lock "${lock_code:?}" sha256sum -b "${worktmp:?}/${snapshot_filename:?}" | awk '{ print $1 }') || { local rcode=$?; rel_lock "${lock_code:?}"; return $rcode; }
+	echo "sha256: $checksum"
 	[ -e "${backup_destination:?}" ] || { do_lock "${lock_code:?}" mkdir -p "${backup_destination:?}"; }
+	echo "Registing snapshot"
 	do_lock "${lock_code:?}" mv --no-clobber --target-directory="${backup_destination:?}/" "${worktmp:?}/${snapshot_filename:?}" || { local rcode=$?; rel_lock "${lock_code:?}"; return $rcode; }
 	# shellcheck disable=SC2016
 	local -r SNAPSHOTCTL_JQ_DBSTATEMENT_CREATE='( [
@@ -264,6 +272,7 @@ create_snapshot() {
 	] )|join(";")'
 	local sql_statement;	sql_statement=$(jq -n -r --arg db_prefix "${SNAPSHOTCTL_DB_PREFIX}" --argjson date "${create_time:?}" --arg fname "${snapshot_filename:?}" --argjson size "${size:?}" --arg sha256 "${checksum:?}" "${SNAPSHOTCTL_JQ_DBSTATEMENT_CREATE:?}") || { local rcode=$?; rel_lock "${lock_code:?}"; return $rcode; }
 	sqlite3 "${SNAPSHOTCTL_DB_PATH:?}" "${sql_statement:?}" >/dev/null || { local rcode=$?; rel_lock "${lock_code:?}"; return $rcode; }
+	echo "Operation done. Unlock db"
 	rel_lock "${lock_code:?}"
 }
 
