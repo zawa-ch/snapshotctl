@@ -107,7 +107,7 @@ initialize() {
 		force)	force='true'; shift;;
 	esac done
 	if [ "$force" != 'true' ] && [ -e "${SNAPSHOTCTL_DB_PATH:?}" ]; then
-		echo "backupctl: Database already exists. If continue anyway, re-run with force switch." >&2
+		echo "snapshotctl: Database already exists. If continue anyway, re-run with force switch." >&2
 		return 1
 	fi
 	if [ -e "${SNAPSHOTCTL_DB_PATH:?}" ]; then
@@ -148,7 +148,7 @@ initialize() {
 		(
 			"INSERT INTO \"\($db_prefix)keeprules\" ( \"name\", \"store_type\", \"bind_duration\", \"keep_entries\", \"keep_duration\" ) VALUES" +
 			( $rules|to_entries|map(
-				if (.value|type) != "object" then ( "backupctl: Parse error. \(.key) is not object."|halt_error ) else . end |
+				if (.value|type) != "object" then ( "snapshotctl: Parse error. \(.key) is not object."|halt_error ) else . end |
 				.value + { name: .key } |
 				"(" +
 				"'\''\(.name)'\'', " +
